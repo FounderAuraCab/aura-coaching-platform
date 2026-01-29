@@ -13,18 +13,23 @@ interface StepProgressWithSubmissions extends StepProgress {
 }
 
 export default function DashboardPage() {
-  const { user, profile } = useAuth()
+  const { user, profile, isLoading: authLoading } = useAuth()
   const [program, setProgram] = useState<Program | null>(null)
   const [stepProgress, setStepProgress] = useState<StepProgressWithSubmissions[]>([])
   const [activeStep, setActiveStep] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLoaded, setHasLoaded] = useState(false)
 
   // Fetch program and progress data
   useEffect(() => {
-    if (!user) return
+    if (authLoading) return
+    if (!user) {
+      setIsLoading(false)
+      return
+    }
+    if (hasLoaded) return
 
     const fetchData = async () => {
-      setIsLoading(true)
       try {
         // Fetch user's program
         const { data: programData, error: programError } = await supabase
@@ -61,11 +66,12 @@ export default function DashboardPage() {
         console.error('Error:', error)
       } finally {
         setIsLoading(false)
+        setHasLoaded(true)
       }
     }
 
     fetchData()
-  }, [user])
+  }, [user, authLoading, hasLoaded])
 
   // Calculate overall progress
   const progressPercentage = useMemo(() => {
@@ -76,16 +82,11 @@ export default function DashboardPage() {
 
   // Prepare steps with status for header
   const headerSteps = useMemo(() => {
-    return PROGRAM_STEPS.map(step => {
-      const progress = stepProgress.find(p => {
-        // Match by step number since we might not have step_id
-        const stepIndex = PROGRAM_STEPS.findIndex(s => s.number === step.number)
-        return stepProgress.indexOf(p) === stepIndex
-      })
-
+    return PROGRAM_STEPS.map((step, index) => {
+      const progress = stepProgress[index]
       return {
         number: step.number,
-        label: step.title.split(' ')[0], // First word as short label
+        label: step.title.split(' ')[0],
         isActive: step.number === activeStep,
         isCompleted: progress?.status === 'completed',
       }
@@ -109,7 +110,6 @@ export default function DashboardPage() {
     }
 
     try {
-      // Create submission
       const { error: submitError } = await supabase.from('submissions').insert({
         step_progress_id: currentProgress.id,
         type: data.type,
@@ -121,35 +121,12 @@ export default function DashboardPage() {
 
       if (submitError) throw submitError
 
-      // Update step progress to pending validation
       const { error: updateError } = await supabase
         .from('step_progress')
         .update({ status: 'pending_validation' })
         .eq('id', currentProgress.id)
 
       if (updateError) throw updateError
-
-      // Create notification for admin
-      const { data: adminUsers } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'admin')
-
-      if (adminUsers) {
-        for (const admin of adminUsers) {
-          await supabase.from('notifications').insert({
-            user_id: admin.id,
-            type: 'submission_received',
-            title: 'Nouvelle soumission',
-            message: `${profile?.first_name} ${profile?.last_name} a soumis un livrable pour l'étape ${activeStep}`,
-            data: { 
-              client_id: user?.id,
-              step_number: activeStep,
-              submission_type: data.type 
-            },
-          })
-        }
-      }
 
       // Refresh data
       const { data: updatedProgress } = await supabase
@@ -166,17 +143,28 @@ export default function DashboardPage() {
     }
   }
 
-  if (isLoading) {
+  // Show loading only during initial auth check
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
           <div className="w-12 h-12 border-2 border-[#2C5F6F] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
             Chargement...
+          </p>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // Show loading during data fetch, but only if we haven't loaded yet
+  if (isLoading && !hasLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
+          <div className="w-12 h-12 border-2 border-[#2C5F6F] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
+            Chargement de votre programme...
           </p>
         </motion.div>
       </div>
@@ -188,9 +176,7 @@ export default function DashboardPage() {
       className="min-h-screen relative overflow-hidden"
       style={{
         backgroundColor: '#F5F3EF',
-        backgroundImage: `
-          radial-gradient(circle at 50% 0%, rgba(245, 243, 239, 1) 0%, rgba(238, 235, 229, 1) 100%)
-        `,
+        backgroundImage: `radial-gradient(circle at 50% 0%, rgba(245, 243, 239, 1) 0%, rgba(238, 235, 229, 1) 100%)`,
       }}
     >
       {/* Texture overlay */}
@@ -210,8 +196,8 @@ export default function DashboardPage() {
       {/* Step Navigation */}
       <div className="max-w-5xl mx-auto px-6 pb-4">
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {PROGRAM_STEPS.map((step) => {
-            const progress = stepProgress[step.number - 1]
+          {PROGRAM_STEPS.map((step, index) => {
+            const progress = stepProgress[index]
             const isLocked = !progress || progress.status === 'locked'
             const isCurrent = step.number === activeStep
 
