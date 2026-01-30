@@ -6,10 +6,11 @@ import { PROGRAM_STEPS } from '@/lib/program-data'
 import { ProgressHeader } from '@/components/dashboard/ProgressHeader'
 import { StepContent } from '@/components/dashboard/StepContent'
 import { toast } from 'sonner'
-import type { Program, StepProgress, Submission } from '@/types/database'
+import type { Program, StepProgress, Submission, Step } from '@/types/database'
 
 interface StepProgressWithSubmissions extends StepProgress {
   submissions?: Submission[]
+  steps?: Step
 }
 
 export default function DashboardPage() {
@@ -46,21 +47,28 @@ export default function DashboardPage() {
           setProgram(programData)
           setActiveStep(programData.current_step)
 
-          // Fetch step progress with submissions
+          // Fetch step progress with submissions AND step info
           const { data: progressData, error: progressError } = await supabase
             .from('step_progress')
             .select(`
               *,
-              submissions (*)
+              submissions (*),
+              steps (*)
             `)
             .eq('program_id', programData.id)
-            .order('created_at', { ascending: true })
 
           if (progressError) {
             console.error('Error fetching progress:', progressError)
           }
 
-          setStepProgress(progressData || [])
+          // Sort by step number
+          const sortedProgress = (progressData || []).sort((a, b) => {
+            const stepNumA = a.steps?.number || 0
+            const stepNumB = b.steps?.number || 0
+            return stepNumA - stepNumB
+          })
+
+          setStepProgress(sortedProgress)
         }
       } catch (error) {
         console.error('Error:', error)
@@ -82,8 +90,10 @@ export default function DashboardPage() {
 
   // Prepare steps with status for header
   const headerSteps = useMemo(() => {
-    return PROGRAM_STEPS.map((step, index) => {
-      const progress = stepProgress[index]
+    return PROGRAM_STEPS.map((step) => {
+      // Find the matching progress by step number
+      const progress = stepProgress.find(sp => sp.steps?.number === step.number)
+      
       return {
         number: step.number,
         label: step.title.split(' ')[0],
@@ -93,9 +103,9 @@ export default function DashboardPage() {
     })
   }, [stepProgress, activeStep])
 
-  // Get current step data
+  // Get current step data and progress
   const currentStepData = PROGRAM_STEPS.find(s => s.number === activeStep)
-  const currentProgress = stepProgress[activeStep - 1]
+  const currentProgress = stepProgress.find(sp => sp.steps?.number === activeStep)
 
   // Handle submission
   const handleSubmit = async (data: { 
@@ -131,11 +141,16 @@ export default function DashboardPage() {
       // Refresh data
       const { data: updatedProgress } = await supabase
         .from('step_progress')
-        .select('*, submissions (*)')
+        .select('*, submissions (*), steps (*)')
         .eq('program_id', program.id)
-        .order('created_at', { ascending: true })
 
-      setStepProgress(updatedProgress || [])
+      const sortedProgress = (updatedProgress || []).sort((a, b) => {
+        const stepNumA = a.steps?.number || 0
+        const stepNumB = b.steps?.number || 0
+        return stepNumA - stepNumB
+      })
+
+      setStepProgress(sortedProgress)
 
     } catch (error) {
       console.error('Submit error:', error)
@@ -157,7 +172,7 @@ export default function DashboardPage() {
     )
   }
 
-  // Show loading during data fetch, but only if we haven't loaded yet
+  // Show loading during data fetch
   if (isLoading && !hasLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
@@ -196,8 +211,8 @@ export default function DashboardPage() {
       {/* Step Navigation */}
       <div className="max-w-5xl mx-auto px-6 pb-4">
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {PROGRAM_STEPS.map((step, index) => {
-            const progress = stepProgress[index]
+          {PROGRAM_STEPS.map((step) => {
+            const progress = stepProgress.find(sp => sp.steps?.number === step.number)
             const isLocked = !progress || progress.status === 'locked'
             const isCurrent = step.number === activeStep
 
