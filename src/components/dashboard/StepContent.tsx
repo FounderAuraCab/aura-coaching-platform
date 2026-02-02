@@ -28,12 +28,12 @@ const iconMap: Record<string, typeof FileText> = {
   FileText, Calendar, Target, Users, BarChart3, Lightbulb, CheckCircle, Settings, Rocket,
 }
 
-const statusConfig = {
-  locked: { label: 'Verrouillé', variant: 'locked' as const, icon: Lock },
-  in_progress: { label: 'En cours', variant: 'pending' as const, icon: Clock },
-  pending_validation: { label: 'En analyse', variant: 'warning' as const, icon: Hourglass },
-  analysis_ready: { label: 'Analyse prête', variant: 'success' as const, icon: Eye },
-  completed: { label: 'Terminé', variant: 'success' as const, icon: CheckCircle2 },
+const statusConfig: Record<string, { label: string; variant: 'locked' | 'pending' | 'warning' | 'success' | 'destructive' | 'default' | 'secondary' | 'outline'; icon: typeof FileText }> = {
+  locked: { label: 'Verrouille', variant: 'locked', icon: Lock },
+  in_progress: { label: 'En cours', variant: 'pending', icon: Clock },
+  pending_validation: { label: 'En analyse', variant: 'warning', icon: Hourglass },
+  analysis_ready: { label: 'Analyse prete', variant: 'success', icon: Eye },
+  completed: { label: 'Termine', variant: 'success', icon: CheckCircle2 },
 }
 
 export function StepContent({ step, progress, submissions = [], onSubmit }: StepContentProps) {
@@ -43,7 +43,8 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const status = progress?.status || 'locked'
-  const StatusIcon = statusConfig[status]?.icon || AlertCircle
+  const config = statusConfig[status] || statusConfig.locked
+  const StatusIcon = config.icon
 
   const isFreePlan = profile?.plan === 'free'
   const isFirstStep = step.number === 1
@@ -73,7 +74,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
     try {
       await onSubmit({ type: 'link', content: linkUrl })
       setLinkUrl('')
-      toast.success('Lien soumis avec succès ! Nous analysons vos données.')
+      toast.success('Lien soumis avec succes ! Nous analysons vos donnees.')
     } catch {
       toast.error('Erreur lors de la soumission')
     } finally {
@@ -83,7 +84,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
 
   const handleFileSubmit = async () => {
     if (!uploadedFile) {
-      toast.error('Veuillez sélectionner un fichier')
+      toast.error('Veuillez selectionner un fichier')
       return
     }
     setIsSubmitting(true)
@@ -98,10 +99,10 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
       const { data: { publicUrl } } = supabase.storage.from('files').getPublicUrl(filePath)
       await onSubmit({ type: 'file', content: uploadedFile.name, fileUrl: publicUrl, fileName: uploadedFile.name })
       setUploadedFile(null)
-      toast.success('Fichier soumis avec succès ! Nous analysons vos données.')
+      toast.success('Fichier soumis avec succes ! Nous analysons vos donnees.')
     } catch (error) {
       console.error(error)
-      toast.error('Erreur lors de l\'upload')
+      toast.error('Erreur lors de upload')
     } finally {
       setIsSubmitting(false)
     }
@@ -113,7 +114,6 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
   const isCompleted = status === 'completed'
   const canSubmit = status === 'in_progress'
 
-  // Pour les utilisateurs free, bloquer après le bloc 1
   const isBlockedForFree = isFreePlan && !isFirstStep && status !== 'completed'
 
   return (
@@ -121,28 +121,27 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
       <Card className={isLocked || isBlockedForFree ? 'opacity-60' : ''}>
         <CardHeader className="text-center pb-6 relative">
           <div className="absolute top-6 right-6">
-            <Badge variant={statusConfig[status]?.variant || 'locked'}>
+            <Badge variant={config.variant}>
               <StatusIcon className="w-3 h-3 mr-1" />
-              {statusConfig[status]?.label || 'Verrouillé'}
+              {config.label}
             </Badge>
           </div>
 
           <div className="mb-2" style={{ fontFamily: 'Inter, sans-serif', fontSize: '10px', fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#2C5F6F' }}>
-            {step.subtitle} — ÉTAPE {step.number}
+            {step.subtitle} - ETAPE {step.number}
           </div>
           <CardTitle className="text-3xl mb-4">{step.title}</CardTitle>
 
-          <motion.div className="w-12 h-[1px] mx-auto mb-6" style={{ background: '#2C5F6F', opacity: 0.3 }} initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 0.8, delay: 0.3 }} />
+          <motion.div className="w-12 h-px mx-auto mb-6" style={{ background: '#2C5F6F', opacity: 0.3 }} initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 0.8, delay: 0.3 }} />
 
           <CardDescription className="max-w-xl mx-auto text-base">{step.description}</CardDescription>
           <div className="mt-4" style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-            Durée estimée : {step.durationWeeks} semaines
+            Duree estimee : {step.durationWeeks} semaines
           </div>
         </CardHeader>
 
         <CardContent className="space-y-8">
 
-          {/* État : En attente d'analyse */}
           {isPendingValidation && (
             <motion.div 
               className="bg-amber-50 border border-amber-200 p-6 text-center"
@@ -152,21 +151,20 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             >
               <Hourglass className="w-12 h-12 text-amber-500 mx-auto mb-4" />
               <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '20px', color: '#2C2C2C', marginBottom: '12px' }}>
-                Données bien reçues !
+                Donnees bien recues !
               </h3>
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A', lineHeight: '1.7' }}>
-                Gaël analyse actuellement vos flux pour identifier vos <strong>3 leviers de liberté</strong>.
+                Gael analyse actuellement vos flux pour identifier vos <strong>3 leviers de liberte</strong>.
               </p>
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#888', marginTop: '16px' }}>
-                ⏱️ Temps d'attente estimé : <strong>24-48h</strong>
+                Temps d attente estime : <strong>24-48h</strong>
               </p>
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888', marginTop: '8px' }}>
-                Vous recevrez une notification dès que votre diagnostic sera prêt.
+                Vous recevrez une notification des que votre diagnostic sera pret.
               </p>
             </motion.div>
           )}
 
-          {/* État : Analyse prête (teaser pour free) */}
           {isAnalysisReady && isFreePlan && (
             <motion.div 
               className="bg-emerald-50 border border-emerald-200 p-6 text-center"
@@ -176,10 +174,9 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             >
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
               <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '20px', color: '#2C2C2C', marginBottom: '12px' }}>
-                Votre diagnostic est prêt !
+                Votre diagnostic est pret !
               </h3>
               
-              {/* Résumé teaser */}
               {progress?.analysis_summary && (
                 <div 
                   className="bg-white border border-emerald-200 p-4 my-6 mx-auto max-w-md"
@@ -189,22 +186,21 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
                     {progress.analysis_summary}
                   </p>
                   <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888', marginTop: '8px' }}>
-                    Résultat de l'analyse de votre Time-Study
+                    Resultat de l analyse de votre Time-Study
                   </p>
                 </div>
               )}
 
-              {/* Zone floutée */}
               <div className="relative my-6">
                 <div 
                   className="bg-gray-100 p-6 blur-sm select-none"
                   style={{ borderRadius: '1px' }}
                 >
                   <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
-                    ✓ Levier #1 : Réorganisation des créneaux clients<br/>
-                    ✓ Levier #2 : Automatisation des confirmations RDV<br/>
-                    ✓ Levier #3 : Délégation de la comptabilité hebdomadaire<br/><br/>
-                    Plan d'action détaillé avec timeline de 12 semaines...
+                    Levier 1 : Reorganisation des creneaux clients<br/>
+                    Levier 2 : Automatisation des confirmations RDV<br/>
+                    Levier 3 : Delegation de la comptabilite hebdomadaire<br/><br/>
+                    Plan d action detaille avec timeline de 12 semaines...
                   </p>
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -213,7 +209,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
               </div>
 
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A', marginBottom: '24px' }}>
-                Pour débloquer votre <strong>plan d'action personnalisé</strong> et comprendre comment récupérer ces heures, réservez votre session de restitution gratuite.
+                Pour debloquer votre <strong>plan d action personnalise</strong> et comprendre comment recuperer ces heures, reservez votre session de restitution gratuite.
               </p>
 
               <Button 
@@ -222,12 +218,11 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
                 onClick={() => window.open('https://calendly.com/votre-lien', '_blank')}
               >
                 <CalendarCheck className="w-5 h-5 mr-2" />
-                Réserver ma session de restitution gratuite
+                Reserver ma session de restitution gratuite
               </Button>
             </motion.div>
           )}
 
-          {/* État : Analyse prête (pour premium - afficher le contenu complet) */}
           {isAnalysisReady && !isFreePlan && (
             <motion.div 
               className="bg-emerald-50 border border-emerald-200 p-6 text-center"
@@ -237,7 +232,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             >
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
               <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '20px', color: '#2C2C2C', marginBottom: '12px' }}>
-                Analyse terminée !
+                Analyse terminee !
               </h3>
               {progress?.analysis_summary && (
                 <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '16px', color: '#2C5F6F', fontWeight: 500 }}>
@@ -245,16 +240,15 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
                 </p>
               )}
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A', marginTop: '16px' }}>
-                Passez à l'étape suivante pour découvrir votre plan d'action.
+                Passez a l etape suivante pour decouvrir votre plan d action.
               </p>
             </motion.div>
           )}
 
-          {/* Objectifs - visible seulement si pas en attente */}
           {!isPendingValidation && !isAnalysisReady && (
             <div className="space-y-4">
               <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>
-                Objectifs de l'étape
+                Objectifs de l etape
               </h3>
               <div className="space-y-4">
                 {step.objectives.map((objective, index) => {
@@ -274,7 +268,6 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             </div>
           )}
 
-          {/* Resources */}
           {step.resources.length > 0 && !isPendingValidation && !isAnalysisReady && (
             <div className="space-y-4">
               <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>
@@ -314,24 +307,21 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             </div>
           )}
 
-          {/* Video si disponible */}
           {step.videoUrl && !isPendingValidation && !isAnalysisReady && !isLocked && (
             <div className="space-y-4">
               <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>
-                Vidéo explicative
+                Video explicative
               </h3>
               <div className="aspect-video bg-black rounded-sm overflow-hidden">
                 <video 
                   src={step.videoUrl} 
                   controls 
                   className="w-full h-full"
-                  poster="/video-poster.jpg"
                 />
               </div>
             </div>
           )}
 
-          {/* Previous Submissions */}
           {submissions.length > 0 && !isPendingValidation && !isAnalysisReady && (
             <div className="space-y-4">
               <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>
@@ -347,7 +337,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
                       </span>
                     </div>
                     <Badge variant={sub.status === 'approved' ? 'success' : sub.status === 'rejected' ? 'destructive' : 'pending'}>
-                      {sub.status === 'approved' ? 'Approuvé' : sub.status === 'rejected' ? 'Refusé' : 'En attente'}
+                      {sub.status === 'approved' ? 'Approuve' : sub.status === 'rejected' ? 'Refuse' : 'En attente'}
                     </Badge>
                   </div>
                 ))}
@@ -355,14 +345,12 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             </div>
           )}
 
-          {/* Submission Form */}
           {canSubmit && !isBlockedForFree && (
             <div className="space-y-6 pt-6 border-t border-gray-200">
               <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>
                 {isFirstStep ? 'Envoyer mon Time-Study pour analyse' : 'Soumettre un livrable'}
               </h3>
 
-              {/* Link submission */}
               <form onSubmit={handleLinkSubmit} className="space-y-4">
                 <Input
                   type="url"
@@ -386,7 +374,6 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
                 </div>
               </div>
 
-              {/* File upload */}
               <div
                 {...getRootProps()}
                 className={`border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
@@ -413,15 +400,15 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
                     </button>
                   </div>
                 ) : (
-                  <>
+                  <div>
                     <Upload className="w-10 h-10 text-gray-400 mx-auto mb-4" />
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
-                      {isDragActive ? 'Déposez le fichier ici' : 'Glissez un fichier ou cliquez pour parcourir'}
+                      {isDragActive ? 'Deposez le fichier ici' : 'Glissez un fichier ou cliquez pour parcourir'}
                     </p>
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888', marginTop: '8px' }}>
                       PDF, DOCX, XLSX, PNG, JPG (max 10MB)
                     </p>
-                  </>
+                  </div>
                 )}
               </div>
 
@@ -434,42 +421,39 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             </div>
           )}
 
-          {/* Locked message */}
           {isLocked && !isBlockedForFree && (
             <div className="text-center py-8">
               <Lock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#888' }}>
-                Complétez l'étape précédente pour débloquer ce module
+                Completez l etape precedente pour debloquer ce module
               </p>
             </div>
           )}
 
-          {/* Blocked for free users */}
           {isBlockedForFree && (
             <div className="text-center py-8">
               <Lock className="w-12 h-12 text-[#2C5F6F] mx-auto mb-4" />
               <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '20px', color: '#2C2C2C', marginBottom: '12px' }}>
-                Module réservé aux membres
+                Module reserve aux membres
               </h3>
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#888', marginBottom: '24px' }}>
-                Terminez votre diagnostic gratuit et réservez votre session de restitution pour accéder à l'accompagnement complet.
+                Terminez votre diagnostic gratuit et reservez votre session de restitution pour acceder a l accompagnement complet.
               </p>
               <Button 
                 variant="outline"
                 onClick={() => window.open('https://calendly.com/votre-lien', '_blank')}
               >
                 <CalendarCheck className="w-4 h-4 mr-2" />
-                Réserver ma session gratuite
+                Reserver ma session gratuite
               </Button>
             </div>
           )}
 
-          {/* Completed state */}
           {isCompleted && (
             <div className="text-center py-8">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
               <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
-                Cette étape est terminée. Bravo ! 🎉
+                Cette etape est terminee. Bravo !
               </p>
             </div>
           )}
