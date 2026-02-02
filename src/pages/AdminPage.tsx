@@ -15,10 +15,20 @@ import {
 } from 'lucide-react'
 import type { Profile, Program, StepProgress, Submission } from '@/types/database'
 
+interface StepInfo {
+  number: number
+  title: string
+}
+
+interface StepProgressWithDetails extends StepProgress {
+  submissions: Submission[]
+  steps: StepInfo
+}
+
 interface ClientData {
   profile: Profile
   program: Program
-  stepProgress: (StepProgress & { submissions: Submission[], steps: { number: number, title: string } })[]
+  stepProgress: StepProgressWithDetails[]
 }
 
 export default function AdminPage() {
@@ -64,7 +74,7 @@ export default function AdminPage() {
             .select('*, submissions (*), steps (*)')
             .eq('program_id', program.id)
 
-          const sortedProgress = (progress || []).sort((a, b) => {
+          const sortedProgress = (progress || []).sort((a: StepProgressWithDetails, b: StepProgressWithDetails) => {
             return (a.steps?.number || 0) - (b.steps?.number || 0)
           })
 
@@ -85,7 +95,8 @@ export default function AdminPage() {
     }
   }
 
-  const handleApproveSubmission = async (submission: Submission, stepProgress: StepProgress & { steps: { number: number } }) => {
+  const handleApproveSubmission = async (submission: Submission, stepProgress: StepProgressWithDetails) => {
+    if (!selectedClient) return
     setIsProcessing(true)
     try {
       await supabase
@@ -97,42 +108,33 @@ export default function AdminPage() {
         })
         .eq('id', submission.id)
 
-      // Pour le bloc 1 des users free, on passe en pending_validation (attente d'analyse)
-      // Pour les autres, on passe directement en completed
-      const clientProfile = selectedClient?.profile
+      const clientProfile = selectedClient.profile
       const isFirstStep = stepProgress.steps?.number === 1
       const isFreePlan = clientProfile?.plan === 'free'
 
       if (isFirstStep && isFreePlan) {
-        // Bloc 1 free : passer en pending_validation
         await supabase
           .from('step_progress')
           .update({ status: 'pending_validation' })
           .eq('id', stepProgress.id)
 
-        toast.success('Soumission reçue - En attente de votre analyse')
+        toast.success('Soumission recue - En attente de votre analyse')
       } else {
-        // Autres cas : compléter l'étape et débloquer la suivante
         await completeStepAndUnlockNext(stepProgress)
-        toast.success('Étape validée et suivante débloquée')
+        toast.success('Etape validee et suivante debloquee')
       }
 
-      // Notifier le client
       await supabase.from('notifications').insert({
-        user_id: selectedClient?.profile.id,
+        user_id: selectedClient.profile.id,
         type: 'submission_approved',
-        title: 'Soumission reçue',
+        title: 'Soumission recue',
         message: isFirstStep && isFreePlan 
-          ? 'Vos données ont été reçues. L\'analyse est en cours.'
-          : 'Votre livrable a été validé.',
+          ? 'Vos donnees ont ete recues. L analyse est en cours.'
+          : 'Votre livrable a ete valide.',
         data: { submission_id: submission.id }
       })
 
       fetchClients()
-      if (selectedClient) {
-        const updated = clients.find(c => c.profile.id === selectedClient.profile.id)
-        if (updated) setSelectedClient(updated)
-      }
 
     } catch (error) {
       console.error('Error:', error)
@@ -142,8 +144,9 @@ export default function AdminPage() {
     }
   }
 
-  const completeStepAndUnlockNext = async (stepProgress: StepProgress & { steps: { number: number } }) => {
-    // Marquer l'étape comme complétée
+  const completeStepAndUnlockNext = async (stepProgress: StepProgressWithDetails) => {
+    if (!selectedClient) return
+
     await supabase
       .from('step_progress')
       .update({ 
@@ -154,11 +157,10 @@ export default function AdminPage() {
       })
       .eq('id', stepProgress.id)
 
-    // Débloquer l'étape suivante
     const currentStepNumber = stepProgress.steps?.number || 1
     if (currentStepNumber < PROGRAM_STEPS.length) {
-      const nextStepProgress = selectedClient?.stepProgress.find(
-        sp => sp.steps?.number === currentStepNumber + 1
+      const nextStepProgress = selectedClient.stepProgress.find(
+        (sp: StepProgressWithDetails) => sp.steps?.number === currentStepNumber + 1
       )
       if (nextStepProgress) {
         await supabase
@@ -169,13 +171,13 @@ export default function AdminPage() {
         await supabase
           .from('programs')
           .update({ current_step: currentStepNumber + 1 })
-          .eq('id', selectedClient?.program.id)
+          .eq('id', selectedClient.program.id)
 
         await supabase.from('notifications').insert({
-          user_id: selectedClient?.profile.id,
+          user_id: selectedClient.profile.id,
           type: 'step_unlocked',
-          title: 'Nouvelle étape débloquée',
-          message: `Félicitations ! L'étape ${currentStepNumber + 1} est maintenant accessible.`,
+          title: 'Nouvelle etape debloquee',
+          message: 'Felicitations ! L etape ' + (currentStepNumber + 1) + ' est maintenant accessible.',
           data: { step_number: currentStepNumber + 1 }
         })
       }
@@ -183,14 +185,14 @@ export default function AdminPage() {
   }
 
   const handleSendAnalysis = async (stepProgress: StepProgress) => {
+    if (!selectedClient) return
     if (!analysisSummary.trim()) {
-      toast.error('Veuillez entrer un résumé de l\'analyse')
+      toast.error('Veuillez entrer un resume de l analyse')
       return
     }
 
     setIsProcessing(true)
     try {
-      // Mettre à jour le step_progress avec le résumé et marquer l'analyse comme prête
       await supabase
         .from('step_progress')
         .update({ 
@@ -200,28 +202,28 @@ export default function AdminPage() {
         })
         .eq('id', stepProgress.id)
 
-      // Notifier le client
       await supabase.from('notifications').insert({
-        user_id: selectedClient?.profile.id,
+        user_id: selectedClient.profile.id,
         type: 'analysis_ready',
-        title: 'Votre diagnostic est prêt !',
-        message: `Le diagnostic révèle des opportunités importantes. Connectez-vous pour découvrir les résultats.`,
+        title: 'Votre diagnostic est pret !',
+        message: 'Le diagnostic revele des opportunites importantes. Connectez-vous pour decouvrir les resultats.',
         data: { step_progress_id: stepProgress.id }
       })
 
-      toast.success('Analyse envoyée ! Le client a été notifié.')
+      toast.success('Analyse envoyee ! Le client a ete notifie.')
       setAnalysisSummary('')
       fetchClients()
 
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Erreur lors de l\'envoi')
+      toast.error('Erreur lors de l envoi')
     } finally {
       setIsProcessing(false)
     }
   }
 
   const handleConvertToPremium = async (clientId: string) => {
+    if (!selectedClient) return
     setIsProcessing(true)
     try {
       await supabase
@@ -229,8 +231,7 @@ export default function AdminPage() {
         .update({ plan: 'premium' })
         .eq('id', clientId)
 
-      // Si le bloc 1 est en analysis_ready, le passer en completed et débloquer le bloc 2
-      const bloc1 = selectedClient?.stepProgress.find(sp => sp.steps?.number === 1)
+      const bloc1 = selectedClient.stepProgress.find((sp: StepProgressWithDetails) => sp.steps?.number === 1)
       if (bloc1 && bloc1.status === 'analysis_ready') {
         await supabase
           .from('step_progress')
@@ -240,8 +241,7 @@ export default function AdminPage() {
           })
           .eq('id', bloc1.id)
 
-        // Débloquer bloc 2
-        const bloc2 = selectedClient?.stepProgress.find(sp => sp.steps?.number === 2)
+        const bloc2 = selectedClient.stepProgress.find((sp: StepProgressWithDetails) => sp.steps?.number === 2)
         if (bloc2) {
           await supabase
             .from('step_progress')
@@ -251,19 +251,19 @@ export default function AdminPage() {
           await supabase
             .from('programs')
             .update({ current_step: 2 })
-            .eq('id', selectedClient?.program.id)
+            .eq('id', selectedClient.program.id)
         }
       }
 
       await supabase.from('notifications').insert({
         user_id: clientId,
         type: 'message',
-        title: 'Bienvenue dans l\'accompagnement !',
-        message: 'Votre accès complet est maintenant activé. Toutes les étapes sont disponibles.',
+        title: 'Bienvenue dans l accompagnement !',
+        message: 'Votre acces complet est maintenant active. Toutes les etapes sont disponibles.',
         data: {}
       })
 
-      toast.success('Client passé en Premium !')
+      toast.success('Client passe en Premium !')
       fetchClients()
 
     } catch (error) {
@@ -275,6 +275,7 @@ export default function AdminPage() {
   }
 
   const handleRejectSubmission = async (submission: Submission, feedback: string) => {
+    if (!selectedClient) return
     setIsProcessing(true)
     try {
       await supabase
@@ -288,14 +289,14 @@ export default function AdminPage() {
         .eq('id', submission.id)
 
       await supabase.from('notifications').insert({
-        user_id: selectedClient?.profile.id,
+        user_id: selectedClient.profile.id,
         type: 'submission_rejected',
         title: 'Modification requise',
-        message: feedback || 'Votre soumission nécessite des modifications.',
+        message: feedback || 'Votre soumission necessite des modifications.',
         data: { submission_id: submission.id }
       })
 
-      toast.success('Retour envoyé au client')
+      toast.success('Retour envoye au client')
       fetchClients()
 
     } catch (error) {
@@ -306,18 +307,20 @@ export default function AdminPage() {
     }
   }
 
-  const getRevenueLabel = (value: string) => {
+  const getRevenueLabel = (value: string | undefined) => {
+    if (!value) return '-'
     const labels: Record<string, string> = {
-      'less_5k': '< 5 000 €',
-      '5k_10k': '5-10k €',
-      '10k_20k': '10-20k €',
-      '20k_50k': '20-50k €',
-      'more_50k': '> 50 000 €'
+      'less_5k': '< 5 000 EUR',
+      '5k_10k': '5-10k EUR',
+      '10k_20k': '10-20k EUR',
+      '20k_50k': '20-50k EUR',
+      'more_50k': '> 50 000 EUR'
     }
     return labels[value] || value
   }
 
-  const getTeamLabel = (value: string) => {
+  const getTeamLabel = (value: string | undefined) => {
+    if (!value) return '-'
     const labels: Record<string, string> = {
       'solo': 'Seule',
       '2_3': '2-3 pers.',
@@ -327,7 +330,8 @@ export default function AdminPage() {
     return labels[value] || value
   }
 
-  const getHoursLabel = (value: string) => {
+  const getHoursLabel = (value: string | undefined) => {
+    if (!value) return '-'
     const labels: Record<string, string> = {
       'less_35': '< 35h',
       '35_45': '35-45h',
@@ -338,13 +342,14 @@ export default function AdminPage() {
     return labels[value] || value
   }
 
-  const getProblemLabel = (value: string) => {
+  const getProblemLabel = (value: string | undefined) => {
+    if (!value) return '-'
     const labels: Record<string, string> = {
       'time': 'Manque de temps',
-      'team': 'Équipe',
+      'team': 'Equipe',
       'revenue': 'CA',
-      'clients': 'Fidélisation',
-      'exhaustion': 'Épuisement'
+      'clients': 'Fidelisation',
+      'exhaustion': 'Epuisement'
     }
     return labels[value] || value
   }
@@ -357,20 +362,18 @@ export default function AdminPage() {
     )
   }
 
-  // Client detail view
   if (selectedClient) {
-    const pendingSubmissions = selectedClient.stepProgress.flatMap(sp => 
-      sp.submissions.filter(s => s.status === 'pending').map(s => ({ ...s, stepProgress: sp }))
+    const pendingSubmissions = selectedClient.stepProgress.flatMap((sp: StepProgressWithDetails) => 
+      sp.submissions.filter((s: Submission) => s.status === 'pending').map((s: Submission) => ({ ...s, stepProgress: sp }))
     )
 
     const awaitingAnalysis = selectedClient.stepProgress.filter(
-      sp => sp.status === 'pending_validation' && sp.steps?.number === 1
+      (sp: StepProgressWithDetails) => sp.status === 'pending_validation' && sp.steps?.number === 1
     )
 
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#F5F3EF' }}>
         <div className="max-w-5xl mx-auto px-6 py-8">
-          {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <Button variant="ghost" onClick={() => setSelectedClient(null)}>
@@ -400,7 +403,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Infos Onboarding */}
           {selectedClient.profile.onboarding_completed && (
             <Card className="mb-8">
               <CardHeader>
@@ -420,44 +422,43 @@ export default function AdminPage() {
                   <div className="bg-[#F5F3EF] p-4" style={{ borderRadius: '1px' }}>
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CA Mensuel</p>
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                      {getRevenueLabel(selectedClient.profile.monthly_revenue || '')}
+                      {getRevenueLabel(selectedClient.profile.monthly_revenue)}
                     </p>
                   </div>
                   <div className="bg-[#F5F3EF] p-4" style={{ borderRadius: '1px' }}>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Équipe</p>
+                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipe</p>
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                      {getTeamLabel(selectedClient.profile.team_size || '')}
+                      {getTeamLabel(selectedClient.profile.team_size)}
                     </p>
                   </div>
                   <div className="bg-[#F5F3EF] p-4" style={{ borderRadius: '1px' }}>
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Heures/sem</p>
                     <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                      {getHoursLabel(selectedClient.profile.hours_worked_per_week || '')}
+                      {getHoursLabel(selectedClient.profile.hours_worked_per_week)}
                     </p>
                   </div>
                 </div>
                 <div className="mt-4 bg-amber-50 p-4" style={{ borderRadius: '1px' }}>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Problème principal</p>
+                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Probleme principal</p>
                   <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                    {getProblemLabel(selectedClient.profile.main_problem || '')}
+                    {getProblemLabel(selectedClient.profile.main_problem)}
                   </p>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Section Analyse à faire (Bloc 1 en attente) */}
           {awaitingAnalysis.length > 0 && (
             <Card className="mb-8 border-amber-300">
               <CardHeader className="bg-amber-50">
                 <CardTitle className="flex items-center gap-2 text-amber-700">
                   <Eye className="w-5 h-5" />
-                  Analyse à effectuer
+                  Analyse a effectuer
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
-                {awaitingAnalysis.map((sp) => {
-                  const submission = sp.submissions.find(s => s.status === 'approved' || s.status === 'pending')
+                {awaitingAnalysis.map((sp: StepProgressWithDetails) => {
+                  const submission = sp.submissions.find((s: Submission) => s.status === 'approved' || s.status === 'pending')
                   return (
                     <div key={sp.id} className="space-y-4">
                       <div className="flex items-center justify-between">
@@ -467,7 +468,7 @@ export default function AdminPage() {
                           </p>
                           {submission && (
                             <a 
-                              href={submission.type === 'link' ? submission.content : submission.file_url}
+                              href={submission.type === 'link' ? submission.content : (submission.file_url || '#')}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[#2C5F6F] hover:underline flex items-center gap-1 mt-1"
@@ -482,18 +483,18 @@ export default function AdminPage() {
 
                       <div className="space-y-3">
                         <label style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 500, color: '#5A5A5A' }}>
-                          Résumé de l'analyse (visible par le client)
+                          Resume de l analyse (visible par le client)
                         </label>
                         <input
                           type="text"
                           value={analysisSummary}
                           onChange={(e) => setAnalysisSummary(e.target.value)}
-                          placeholder="Ex: 12h perdues/semaine en tâches délégables"
+                          placeholder="Ex: 12h perdues/semaine en taches delegables"
                           className="w-full px-4 py-3 border border-gray-300 focus:border-[#2C5F6F] outline-none"
                           style={{ borderRadius: '1px', fontFamily: 'Inter, sans-serif', fontSize: '14px' }}
                         />
                         <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888' }}>
-                          Ce résumé sera affiché en gros au client. Le reste du plan d'action sera flouté avec un CTA Calendly.
+                          Ce resume sera affiche en gros au client. Le reste du plan d action sera floute avec un CTA Calendly.
                         </p>
                       </div>
 
@@ -503,7 +504,7 @@ export default function AdminPage() {
                         className="w-full"
                       >
                         <Send className="w-4 h-4 mr-2" />
-                        Envoyer l'analyse et notifier le client
+                        Envoyer l analyse et notifier le client
                       </Button>
                     </div>
                   )
@@ -512,7 +513,6 @@ export default function AdminPage() {
             </Card>
           )}
 
-          {/* Pending Submissions */}
           {pendingSubmissions.length > 0 && (
             <Card className="mb-8">
               <CardHeader>
@@ -522,8 +522,9 @@ export default function AdminPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {pendingSubmissions.map(({ stepProgress, ...submission }) => {
-                  const step = PROGRAM_STEPS.find(s => s.number === stepProgress.steps?.number)
+                {pendingSubmissions.map((item) => {
+                  const submission = item as Submission & { stepProgress: StepProgressWithDetails }
+                  const step = PROGRAM_STEPS.find(s => s.number === submission.stepProgress.steps?.number)
 
                   return (
                     <div key={submission.id} className="p-4 bg-[#FEFDFB] border border-gray-200" style={{ borderRadius: '1px' }}>
@@ -541,8 +542,8 @@ export default function AdminPage() {
                             ) : (
                               <FileText className="w-4 h-4 text-[#2C5F6F]" />
                             )}
-                            
-                              href={submission.type === 'link' ? submission.content : submission.file_url || '#'}
+                            <a
+                              href={submission.type === 'link' ? submission.content : (submission.file_url || '#')}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[#2C5F6F] hover:underline flex items-center gap-1"
@@ -559,7 +560,7 @@ export default function AdminPage() {
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            onClick={() => handleApproveSubmission(submission, stepProgress)}
+                            onClick={() => handleApproveSubmission(submission, submission.stepProgress)}
                             disabled={isProcessing}
                           >
                             <CheckCircle className="w-4 h-4 mr-1" />
@@ -586,7 +587,6 @@ export default function AdminPage() {
             </Card>
           )}
 
-          {/* Progress Overview */}
           <Card>
             <CardHeader>
               <CardTitle>Progression du programme</CardTitle>
@@ -594,7 +594,7 @@ export default function AdminPage() {
             <CardContent>
               <div className="space-y-4">
                 {PROGRAM_STEPS.map((step) => {
-                  const progress = selectedClient.stepProgress.find(sp => sp.steps?.number === step.number)
+                  const progress = selectedClient.stepProgress.find((sp: StepProgressWithDetails) => sp.steps?.number === step.number)
                   const status = progress?.status || 'locked'
 
                   return (
@@ -623,11 +623,11 @@ export default function AdminPage() {
                         status === 'analysis_ready' ? 'success' :
                         'locked'
                       }>
-                        {status === 'completed' ? 'Terminé' :
+                        {status === 'completed' ? 'Termine' :
                          status === 'in_progress' ? 'En cours' :
                          status === 'pending_validation' ? 'En analyse' :
-                         status === 'analysis_ready' ? 'Analyse prête' :
-                         'Verrouillé'}
+                         status === 'analysis_ready' ? 'Analyse prete' :
+                         'Verrouille'}
                       </Badge>
                     </div>
                   )
@@ -640,17 +640,15 @@ export default function AdminPage() {
     )
   }
 
-  // Clients list view
   const freeClients = clients.filter(c => c.profile.plan === 'free')
   const premiumClients = clients.filter(c => c.profile.plan === 'premium')
   const awaitingAnalysisCount = clients.filter(c => 
-    c.stepProgress.some(sp => sp.status === 'pending_validation' && sp.steps?.number === 1)
+    c.stepProgress.some((sp: StepProgressWithDetails) => sp.status === 'pending_validation' && sp.steps?.number === 1)
   ).length
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F3EF' }}>
       <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '32px', color: '#2C2C2C' }}>
@@ -672,7 +670,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           <Card>
             <CardContent className="pt-6">
@@ -703,7 +700,7 @@ export default function AdminPage() {
                     {awaitingAnalysisCount}
                   </p>
                   <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                    Analyses à faire
+                    Analyses a faire
                   </p>
                 </div>
               </div>
@@ -747,7 +744,6 @@ export default function AdminPage() {
           </Card>
         </div>
 
-        {/* Clients List */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -766,13 +762,13 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-3">
                 {clients.map((client) => {
-                  const pendingCount = client.stepProgress.flatMap(sp => 
-                    sp.submissions.filter(s => s.status === 'pending')
+                  const pendingCount = client.stepProgress.flatMap((sp: StepProgressWithDetails) => 
+                    sp.submissions.filter((s: Submission) => s.status === 'pending')
                   ).length
                   const needsAnalysis = client.stepProgress.some(
-                    sp => sp.status === 'pending_validation' && sp.steps?.number === 1
+                    (sp: StepProgressWithDetails) => sp.status === 'pending_validation' && sp.steps?.number === 1
                   )
-                  const completedSteps = client.stepProgress.filter(sp => sp.status === 'completed').length
+                  const completedSteps = client.stepProgress.filter((sp: StepProgressWithDetails) => sp.status === 'completed').length
 
                   return (
                     <motion.div
@@ -811,7 +807,7 @@ export default function AdminPage() {
                             Bloc {client.program.current_step}/5
                           </p>
                           <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888' }}>
-                            {completedSteps} terminé{completedSteps > 1 ? 's' : ''}
+                            {completedSteps} termine{completedSteps > 1 ? 's' : ''}
                           </p>
                         </div>
                         {needsAnalysis && (
@@ -836,4 +832,3 @@ export default function AdminPage() {
     </div>
   )
 }
-
