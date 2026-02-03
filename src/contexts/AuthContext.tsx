@@ -30,34 +30,107 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      
+      if (error) {
+        console.error('Error fetching profile:', error)
+        return null
+      }
+      return data
+    } catch (e) {
+      console.error('Exception fetching profile:', e)
+      return null
+    }
+  }
+
   useEffect(() => {
     let isMounted = true
+    let timeoutId: NodeJS.Timeout
 
     const init = async () => {
       try {
-        // Get session
-        const { data: { session: currentSession } } = await supabase.auth.getSession()
+        // Timeout de securite - 5 secondes max
+        timeoutId = setTimeout(() => {
+          if (isMounted && isLoading) {
+            console.log('Auth timeout - forcing load complete')
+            setIsLoading(false)
+          }
+        }, 5000)
+
+        // Essayer getSession d'abord
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession()
         
         if (!isMounted) return
-        
+
+        if (error) {
+          console.error('getSession error:', error)
+        }
+
         if (currentSession?.user) {
+          console.log('Session found via getSession')
           setSession(currentSession)
           setUser(currentSession.user)
           
-          // Fetch profile
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', currentSession.user.id)
-            .single()
-          
+          const profileData = await fetchProfile(currentSession.user.id)
           if (isMounted && profileData) {
             setProfile(profileData)
           }
+          setIsLoading(false)
+          return
+        }
+
+        // Si pas de session via getSession, verifier localStorage directement
+        const storageKey = `sb-${new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0]}-auth-token`
+        const storedSession = localStorage.getItem(storageKey)
+        
+        if (storedSession) {
+          try {
+            const parsed = JSON.parse(storedSession)
+            if (parsed?.access_token && parsed?.user) {
+              console.log('Session found in localStorage, refreshing...')
+              
+              // Essayer de rafraichir la session
+              const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+                refresh_token: parsed.refresh_token
+              })
+
+              if (!isMounted) return
+
+              if (refreshError) {
+                console.error('Refresh error:', refreshError)
+                // Token expire, nettoyer
+                localStorage.removeItem(storageKey)
+                setIsLoading(false)
+                return
+              }
+
+              if (refreshData.session) {
+                console.log('Session refreshed successfully')
+                setSession(refreshData.session)
+                setUser(refreshData.session.user)
+                
+                const profileData = await fetchProfile(refreshData.session.user.id)
+                if (isMounted && profileData) {
+                  setProfile(profileData)
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing stored session:', e)
+          }
+        }
+
+        if (isMounted) {
+          setIsLoading(false)
         }
       } catch (error) {
         console.error('Auth init error:', error)
-      } finally {
         if (isMounted) {
           setIsLoading(false)
         }
@@ -66,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     init()
 
-    // Auth state listener
+    // Listener pour les changements d'auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (!isMounted) return
@@ -77,28 +150,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(null)
           setUser(null)
           setProfile(null)
-          setIsLoading(false)
         } else if (newSession?.user) {
           setSession(newSession)
           setUser(newSession.user)
           
-          // Fetch profile
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', newSession.user.id)
-            .single()
-          
+          const profileData = await fetchProfile(newSession.user.id)
           if (isMounted && profileData) {
             setProfile(profileData)
           }
-          setIsLoading(false)
         }
+        
+        setIsLoading(false)
       }
     )
 
     return () => {
       isMounted = false
+      clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
   }, [])
@@ -130,12 +198,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = async () => {
     if (user) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-      if (data) setProfile(data)
+      const profileData = await fetchProfile(user.id)
+      if (profileData) setProfile(profileData)
     }
   }
 
