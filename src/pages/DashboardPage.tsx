@@ -276,7 +276,7 @@ export default function DashboardPage() {
 
       {/* Step Navigation */}
       <div className="max-w-5xl mx-auto px-6 pb-4">
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="flex gap-2">
           {PROGRAM_STEPS.map((step) => {
             const progress = stepProgress.find(p => p.steps?.number === step.number)
             const isLocked = !isStepAccessible(step.number)
@@ -292,7 +292,7 @@ export default function DashboardPage() {
                   isCurrent
                     ? 'bg-[#2C5F6F] text-white'
                     : isLocked || isBlockedForFree
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : 'bg-white text-[#5A5A5A] hover:bg-[#E8E5DF]'
                 }`}
                 style={{
@@ -303,7 +303,6 @@ export default function DashboardPage() {
                 }}
               >
                 {step.number}. {step.title}
-                {isBlockedForFree && ' 🔒'}
               </button>
             )
           })}
