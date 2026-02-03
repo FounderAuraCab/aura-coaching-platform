@@ -1,69 +1,132 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'motion/react'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
 import { PROGRAM_STEPS } from '@/lib/program-data'
 import { ProgressHeader } from '@/components/dashboard/ProgressHeader'
 import { StepContent } from '@/components/dashboard/StepContent'
 import { toast } from 'sonner'
 import type { Program, StepProgress, Submission } from '@/types/database'
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 interface StepProgressWithSubmissions extends StepProgress {
   submissions?: Submission[]
+  steps?: {
+    id: string
+    number: number
+    title: string
+  }
+}
+
+const getToken = (session: any): string | null => {
+  if (session?.access_token) return session.access_token
+  
+  try {
+    const storageKey = `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`
+    const stored = localStorage.getItem(storageKey)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      return parsed.access_token
+    }
+  } catch (e) {
+    console.error('Error getting token:', e)
+  }
+  return null
+}
+
+const fetchWithAuth = async (endpoint: string, token: string) => {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  })
+  return response.json()
+}
+
+const postWithAuth = async (endpoint: string, token: string, body: any) => {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(body)
+  })
+  return response.json()
+}
+
+const patchWithAuth = async (endpoint: string, token: string, body: any) => {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify(body)
+  })
+  return response.json()
 }
 
 export default function DashboardPage() {
-  const { user, profile } = useAuth()
+  const { user, profile, session } = useAuth()
   const [program, setProgram] = useState<Program | null>(null)
   const [stepProgress, setStepProgress] = useState<StepProgressWithSubmissions[]>([])
   const [activeStep, setActiveStep] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
 
+  const isFreePlan = profile?.plan === 'free'
+
   // Fetch program and progress data
-  useEffect(() => {
-    if (!user) return
-
-    const fetchData = async () => {
-      setIsLoading(true)
-      try {
-        // Fetch user's program
-        const { data: programData, error: programError } = await supabase
-          .from('programs')
-          .select('*')
-          .eq('user_id', user.id)
-          .single()
-
-        if (programError && programError.code !== 'PGRST116') {
-          console.error('Error fetching program:', programError)
-        }
-
-        if (programData) {
-          setProgram(programData)
-          setActiveStep(programData.current_step)
-
-          // Fetch step progress with submissions
-          const { data: progressData, error: progressError } = await supabase
-            .from('step_progress')
-            .select(`
-              *,
-              submissions (*)
-            `)
-            .eq('program_id', programData.id)
-            .order('created_at', { ascending: true })
-
-          if (progressError) {
-            console.error('Error fetching progress:', progressError)
-          }
-
-          setStepProgress(progressData || [])
-        }
-      } catch (error) {
-        console.error('Error:', error)
-      } finally {
-        setIsLoading(false)
-      }
+  const fetchData = async () => {
+    const token = getToken(session)
+    if (!token || !user) {
+      setIsLoading(false)
+      return
     }
 
+    try {
+      // Fetch user's program
+      const programs = await fetchWithAuth(`programs?select=*&user_id=eq.${user.id}`, token)
+
+      if (!programs || programs.length === 0 || programs.error) {
+        console.error('Error fetching program:', programs)
+        setIsLoading(false)
+        return
+      }
+
+      const programData = programs[0]
+      setProgram(programData)
+      setActiveStep(programData.current_step || 1)
+
+      // Fetch step progress with submissions and steps info
+      const progressData = await fetchWithAuth(
+        `step_progress?select=*,submissions(*),steps(*)&program_id=eq.${programData.id}`,
+        token
+      )
+
+      if (progressData && !progressData.error) {
+        // Trier par numero de step
+        const sorted = progressData.sort((a: StepProgressWithSubmissions, b: StepProgressWithSubmissions) => 
+          (a.steps?.number || 0) - (b.steps?.number || 0)
+        )
+        setStepProgress(sorted)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!user) return
     fetchData()
   }, [user])
 
@@ -77,15 +140,11 @@ export default function DashboardPage() {
   // Prepare steps with status for header
   const headerSteps = useMemo(() => {
     return PROGRAM_STEPS.map(step => {
-      const progress = stepProgress.find(p => {
-        // Match by step number since we might not have step_id
-        const stepIndex = PROGRAM_STEPS.findIndex(s => s.number === step.number)
-        return stepProgress.indexOf(p) === stepIndex
-      })
+      const progress = stepProgress.find(p => p.steps?.number === step.number)
 
       return {
         number: step.number,
-        label: step.title.split(' ')[0], // First word as short label
+        label: step.title.split(' ')[0],
         isActive: step.number === activeStep,
         isCompleted: progress?.status === 'completed',
       }
@@ -94,7 +153,7 @@ export default function DashboardPage() {
 
   // Get current step data
   const currentStepData = PROGRAM_STEPS.find(s => s.number === activeStep)
-  const currentProgress = stepProgress[activeStep - 1]
+  const currentProgress = stepProgress.find(p => p.steps?.number === activeStep)
 
   // Handle submission
   const handleSubmit = async (data: { 
@@ -103,45 +162,43 @@ export default function DashboardPage() {
     fileUrl?: string
     fileName?: string 
   }) => {
-    if (!program || !currentProgress) {
-      toast.error('Erreur: programme non trouvé')
+    const token = getToken(session)
+    if (!token || !program || !currentProgress) {
+      toast.error('Erreur: programme non trouve')
       return
     }
 
     try {
       // Create submission
-      const { error: submitError } = await supabase.from('submissions').insert({
+      const submitResult = await postWithAuth('submissions', token, {
         step_progress_id: currentProgress.id,
+        user_id: user?.id,
         type: data.type,
         content: data.content,
-        file_url: data.fileUrl,
-        file_name: data.fileName,
+        file_url: data.fileUrl || null,
+        file_name: data.fileName || null,
         status: 'pending',
       })
 
-      if (submitError) throw submitError
+      if (submitResult.error) throw new Error(submitResult.error.message)
 
       // Update step progress to pending validation
-      const { error: updateError } = await supabase
-        .from('step_progress')
-        .update({ status: 'pending_validation' })
-        .eq('id', currentProgress.id)
-
-      if (updateError) throw updateError
+      await patchWithAuth(
+        `step_progress?id=eq.${currentProgress.id}`,
+        token,
+        { status: 'pending_validation' }
+      )
 
       // Create notification for admin
-      const { data: adminUsers } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'admin')
+      const admins = await fetchWithAuth(`profiles?select=id&role=eq.admin`, token)
 
-      if (adminUsers) {
-        for (const admin of adminUsers) {
-          await supabase.from('notifications').insert({
+      if (admins && !admins.error) {
+        for (const admin of admins) {
+          await postWithAuth('notifications', token, {
             user_id: admin.id,
             type: 'submission_received',
             title: 'Nouvelle soumission',
-            message: `${profile?.first_name} ${profile?.last_name} a soumis un livrable pour l'étape ${activeStep}`,
+            message: `${profile?.first_name} ${profile?.last_name} a soumis un livrable pour l etape ${activeStep}`,
             data: { 
               client_id: user?.id,
               step_number: activeStep,
@@ -151,19 +208,29 @@ export default function DashboardPage() {
         }
       }
 
+      toast.success('Soumission envoyee avec succes !')
+      
       // Refresh data
-      const { data: updatedProgress } = await supabase
-        .from('step_progress')
-        .select('*, submissions (*)')
-        .eq('program_id', program.id)
-        .order('created_at', { ascending: true })
-
-      setStepProgress(updatedProgress || [])
+      fetchData()
 
     } catch (error) {
       console.error('Submit error:', error)
+      toast.error('Erreur lors de la soumission')
       throw error
     }
+  }
+
+  // Check if step is accessible
+  const isStepAccessible = (stepNumber: number) => {
+    const progress = stepProgress.find(p => p.steps?.number === stepNumber)
+    if (!progress) return stepNumber === 1
+    
+    // Pour les users free, seul le bloc 1 est accessible
+    if (isFreePlan && stepNumber > 1) {
+      return progress.status === 'completed'
+    }
+    
+    return progress.status !== 'locked'
   }
 
   if (isLoading) {
@@ -211,19 +278,20 @@ export default function DashboardPage() {
       <div className="max-w-5xl mx-auto px-6 pb-4">
         <div className="flex gap-2 overflow-x-auto pb-2">
           {PROGRAM_STEPS.map((step) => {
-            const progress = stepProgress[step.number - 1]
-            const isLocked = !progress || progress.status === 'locked'
+            const progress = stepProgress.find(p => p.steps?.number === step.number)
+            const isLocked = !isStepAccessible(step.number)
             const isCurrent = step.number === activeStep
+            const isBlockedForFree = isFreePlan && step.number > 1 && progress?.status !== 'completed'
 
             return (
               <button
                 key={step.number}
-                onClick={() => !isLocked && setActiveStep(step.number)}
-                disabled={isLocked}
+                onClick={() => !isLocked && !isBlockedForFree && setActiveStep(step.number)}
+                disabled={isLocked || isBlockedForFree}
                 className={`px-4 py-2 whitespace-nowrap transition-all ${
                   isCurrent
                     ? 'bg-[#2C5F6F] text-white'
-                    : isLocked
+                    : isLocked || isBlockedForFree
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-white text-[#5A5A5A] hover:bg-[#E8E5DF]'
                 }`}
@@ -235,6 +303,7 @@ export default function DashboardPage() {
                 }}
               >
                 {step.number}. {step.title}
+                {isBlockedForFree && ' 🔒'}
               </button>
             )
           })}
