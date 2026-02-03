@@ -1,332 +1,256 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'motion/react'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import { PROGRAM_STEPS } from '@/lib/program-data'
+import { ProgressHeader } from '@/components/dashboard/ProgressHeader'
 import { StepContent } from '@/components/dashboard/StepContent'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { 
-  ChevronRight, CheckCircle2, Lock, Clock, LogOut, 
-  Bell, Settings, Hourglass, Eye
-} from 'lucide-react'
-import type { StepProgress, Submission } from '@/types/database'
+import type { Program, StepProgress, Submission } from '@/types/database'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-interface StepProgressWithDetails extends StepProgress {
-  steps: {
-    id: string
-    number: number
-    title: string
-    subtitle: string
-  }
-  submissions: Submission[]
-}
-
-const getToken = (session: any): string | null => {
-  if (session?.access_token) return session.access_token
-  
-  try {
-    const storageKey = `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`
-    const stored = localStorage.getItem(storageKey)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      return parsed.access_token
-    }
-  } catch (e) {
-    console.error('Error getting token:', e)
-  }
-  return null
-}
-
-const fetchWithAuth = async (endpoint: string, token: string) => {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-  })
-  return response.json()
-}
-
-const postWithAuth = async (endpoint: string, token: string, body: any) => {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation'
-    },
-    body: JSON.stringify(body)
-  })
-  return response.json()
+interface StepProgressWithSubmissions extends StepProgress {
+  submissions?: Submission[]
 }
 
 export default function DashboardPage() {
-  const { user, profile, isLoading: authLoading, session, signOut } = useAuth()
-  const [program, setProgram] = useState<any>(null)
-  const [stepProgress, setStepProgress] = useState<StepProgressWithDetails[]>([])
+  const { user, profile } = useAuth()
+  const [program, setProgram] = useState<Program | null>(null)
+  const [stepProgress, setStepProgress] = useState<StepProgressWithSubmissions[]>([])
   const [activeStep, setActiveStep] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const fetchData = async () => {
-    const token = getToken(session)
-    if (!token || !user) return
-
-    try {
-      // Fetch program
-      const programs = await fetchWithAuth(`programs?select=*&user_id=eq.${user.id}`, token)
-      
-      if (!programs || programs.length === 0 || programs.error) {
-        setError('Programme non trouve')
-        setLoading(false)
-        return
-      }
-
-      const prog = programs[0]
-      setProgram(prog)
-      setActiveStep(prog.current_step || 1)
-
-      // Fetch step_progress
-      const progress = await fetchWithAuth(
-        `step_progress?select=*,steps(*),submissions(*)&program_id=eq.${prog.id}`,
-        token
-      )
-
-      if (progress && !progress.error) {
-        const sorted = progress.sort((a: StepProgressWithDetails, b: StepProgressWithDetails) => 
-          (a.steps?.number || 0) - (b.steps?.number || 0)
-        )
-        setStepProgress(sorted)
-      }
-
-      setLoading(false)
-    } catch (e) {
-      console.error('Fetch error:', e)
-      setError(String(e))
-      setLoading(false)
-    }
-  }
-
+  // Fetch program and progress data
   useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      setLoading(false)
-      return
+    if (!user) return
+
+    const fetchData = async () => {
+      setIsLoading(true)
+      try {
+        // Fetch user's program
+        const { data: programData, error: programError } = await supabase
+          .from('programs')
+          .select('*')
+          .eq('user_id', user.id)
+          .single()
+
+        if (programError && programError.code !== 'PGRST116') {
+          console.error('Error fetching program:', programError)
+        }
+
+        if (programData) {
+          setProgram(programData)
+          setActiveStep(programData.current_step)
+
+          // Fetch step progress with submissions
+          const { data: progressData, error: progressError } = await supabase
+            .from('step_progress')
+            .select(`
+              *,
+              submissions (*)
+            `)
+            .eq('program_id', programData.id)
+            .order('created_at', { ascending: true })
+
+          if (progressError) {
+            console.error('Error fetching progress:', progressError)
+          }
+
+          setStepProgress(progressData || [])
+        }
+      } catch (error) {
+        console.error('Error:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
+
     fetchData()
-  }, [user, authLoading])
+  }, [user])
 
-  const handleSubmission = async (data: { type: 'link' | 'file'; content: string; fileUrl?: string; fileName?: string }) => {
-    const token = getToken(session)
-    if (!token) {
-      toast.error('Session expiree')
-      return
-    }
+  // Calculate overall progress
+  const progressPercentage = useMemo(() => {
+    if (!stepProgress.length) return 0
+    const completed = stepProgress.filter(p => p.status === 'completed').length
+    return Math.round((completed / PROGRAM_STEPS.length) * 100)
+  }, [stepProgress])
 
-    const currentProgress = stepProgress.find(sp => sp.steps?.number === activeStep)
-    if (!currentProgress) return
-
-    try {
-      await postWithAuth('submissions', token, {
-        step_progress_id: currentProgress.id,
-        user_id: user?.id,
-        type: data.type,
-        content: data.content,
-        file_url: data.fileUrl || null,
-        file_name: data.fileName || null,
-        status: 'pending'
+  // Prepare steps with status for header
+  const headerSteps = useMemo(() => {
+    return PROGRAM_STEPS.map(step => {
+      const progress = stepProgress.find(p => {
+        // Match by step number since we might not have step_id
+        const stepIndex = PROGRAM_STEPS.findIndex(s => s.number === step.number)
+        return stepProgress.indexOf(p) === stepIndex
       })
 
-      toast.success('Soumission envoyee !')
-      fetchData()
-    } catch (e) {
-      console.error('Submission error:', e)
-      toast.error('Erreur lors de la soumission')
-    }
-  }
+      return {
+        number: step.number,
+        label: step.title.split(' ')[0], // First word as short label
+        isActive: step.number === activeStep,
+        isCompleted: progress?.status === 'completed',
+      }
+    })
+  }, [stepProgress, activeStep])
 
-  const getStepStatus = (stepNumber: number) => {
-    const progress = stepProgress.find(sp => sp.steps?.number === stepNumber)
-    return progress?.status || 'locked'
-  }
-
-  const getStepIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return CheckCircle2
-      case 'in_progress': return Clock
-      case 'pending_validation': return Hourglass
-      case 'analysis_ready': return Eye
-      default: return Lock
-    }
-  }
-
-  const getStepColor = (status: string, isActive: boolean) => {
-    if (isActive) return 'bg-[#2C5F6F] text-white'
-    switch (status) {
-      case 'completed': return 'bg-emerald-500 text-white'
-      case 'in_progress': return 'bg-[#2C5F6F]/20 text-[#2C5F6F]'
-      case 'pending_validation': return 'bg-amber-500 text-white'
-      case 'analysis_ready': return 'bg-emerald-400 text-white'
-      default: return 'bg-gray-200 text-gray-400'
-    }
-  }
-
-  if (authLoading || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
-        <div className="text-center">
-          <div className="w-12 h-12 border-2 border-[#2C5F6F] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#888' }}>
-            Chargement de votre espace...
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
-        <div className="text-center">
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '16px', color: '#e53e3e' }}>
-            {error}
-          </p>
-          <Button onClick={() => window.location.reload()} className="mt-4">
-            Reessayer
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
+  // Get current step data
   const currentStepData = PROGRAM_STEPS.find(s => s.number === activeStep)
-  const currentProgress = stepProgress.find(sp => sp.steps?.number === activeStep)
-  const currentSubmissions = currentProgress?.submissions || []
+  const currentProgress = stepProgress[activeStep - 1]
+
+  // Handle submission
+  const handleSubmit = async (data: { 
+    type: 'link' | 'file'
+    content: string
+    fileUrl?: string
+    fileName?: string 
+  }) => {
+    if (!program || !currentProgress) {
+      toast.error('Erreur: programme non trouvé')
+      return
+    }
+
+    try {
+      // Create submission
+      const { error: submitError } = await supabase.from('submissions').insert({
+        step_progress_id: currentProgress.id,
+        type: data.type,
+        content: data.content,
+        file_url: data.fileUrl,
+        file_name: data.fileName,
+        status: 'pending',
+      })
+
+      if (submitError) throw submitError
+
+      // Update step progress to pending validation
+      const { error: updateError } = await supabase
+        .from('step_progress')
+        .update({ status: 'pending_validation' })
+        .eq('id', currentProgress.id)
+
+      if (updateError) throw updateError
+
+      // Create notification for admin
+      const { data: adminUsers } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+
+      if (adminUsers) {
+        for (const admin of adminUsers) {
+          await supabase.from('notifications').insert({
+            user_id: admin.id,
+            type: 'submission_received',
+            title: 'Nouvelle soumission',
+            message: `${profile?.first_name} ${profile?.last_name} a soumis un livrable pour l'étape ${activeStep}`,
+            data: { 
+              client_id: user?.id,
+              step_number: activeStep,
+              submission_type: data.type 
+            },
+          })
+        }
+      }
+
+      // Refresh data
+      const { data: updatedProgress } = await supabase
+        .from('step_progress')
+        .select('*, submissions (*)')
+        .eq('program_id', program.id)
+        .order('created_at', { ascending: true })
+
+      setStepProgress(updatedProgress || [])
+
+    } catch (error) {
+      console.error('Submit error:', error)
+      throw error
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <div className="w-12 h-12 border-2 border-[#2C5F6F] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
+            Chargement...
+          </p>
+        </motion.div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F3EF' }}>
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: '#2C2C2C' }}>
-                AURA
-              </h1>
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                Programme d'accompagnement
-              </span>
-            </div>
-            <div className="flex items-center gap-4">
-              <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
-                {profile?.first_name} {profile?.last_name}
-              </span>
-              {profile?.plan && (
-                <Badge variant={profile.plan === 'premium' ? 'success' : 'secondary'}>
-                  {profile.plan === 'premium' ? 'Premium' : 'Free'}
-                </Badge>
-              )}
-              <Button variant="ghost" size="sm" onClick={() => signOut()}>
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+    <div
+      className="min-h-screen relative overflow-hidden"
+      style={{
+        backgroundColor: '#F5F3EF',
+        backgroundImage: `
+          radial-gradient(circle at 50% 0%, rgba(245, 243, 239, 1) 0%, rgba(238, 235, 229, 1) 100%)
+        `,
+      }}
+    >
+      {/* Texture overlay */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-[0.035]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='paperTexture'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' seed='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paperTexture)' opacity='0.5'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '150px 150px',
+          mixBlendMode: 'multiply',
+        }}
+      />
+
+      {/* Progress Header */}
+      <ProgressHeader steps={headerSteps} progressPercentage={progressPercentage} />
+
+      {/* Step Navigation */}
+      <div className="max-w-5xl mx-auto px-6 pb-4">
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {PROGRAM_STEPS.map((step) => {
+            const progress = stepProgress[step.number - 1]
+            const isLocked = !progress || progress.status === 'locked'
+            const isCurrent = step.number === activeStep
+
+            return (
+              <button
+                key={step.number}
+                onClick={() => !isLocked && setActiveStep(step.number)}
+                disabled={isLocked}
+                className={`px-4 py-2 whitespace-nowrap transition-all ${
+                  isCurrent
+                    ? 'bg-[#2C5F6F] text-white'
+                    : isLocked
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-[#5A5A5A] hover:bg-[#E8E5DF]'
+                }`}
+                style={{
+                  borderRadius: '1px',
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                }}
+              >
+                {step.number}. {step.title}
+              </button>
+            )
+          })}
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-12 gap-8">
-          
-          {/* Sidebar - Steps Navigation */}
-          <div className="col-span-3">
-            <div className="bg-white p-6 sticky top-8" style={{ borderRadius: '1px' }}>
-              <h2 style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888', marginBottom: '24px' }}>
-                Votre parcours
-              </h2>
-              
-              <div className="space-y-2">
-                {PROGRAM_STEPS.map((step, index) => {
-                  const status = getStepStatus(step.number)
-                  const isActive = activeStep === step.number
-                  const Icon = getStepIcon(status)
-                  const isClickable = status !== 'locked' || step.number === 1
-
-                  return (
-                    <motion.button
-                      key={step.number}
-                      onClick={() => isClickable && setActiveStep(step.number)}
-                      className={`w-full flex items-center gap-3 p-3 text-left transition-all ${
-                        isActive ? 'bg-[#F5F3EF]' : 'hover:bg-gray-50'
-                      } ${!isClickable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                      style={{ borderRadius: '1px' }}
-                      whileHover={isClickable ? { x: 4 } : {}}
-                    >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getStepColor(status, isActive)}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p style={{ 
-                          fontFamily: 'Inter, sans-serif', 
-                          fontSize: '13px', 
-                          fontWeight: isActive ? 600 : 400,
-                          color: isActive ? '#2C2C2C' : '#5A5A5A',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {step.title}
-                        </p>
-                        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888' }}>
-                          {step.subtitle}
-                        </p>
-                      </div>
-                      {isActive && <ChevronRight className="w-4 h-4 text-[#2C5F6F]" />}
-                    </motion.button>
-                  )
-                })}
-              </div>
-
-              {/* Progress Summary */}
-              <div className="mt-8 pt-6 border-t border-gray-100">
-                <div className="flex justify-between items-center mb-2">
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                    Progression globale
-                  </span>
-                  <span style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, color: '#2C5F6F' }}>
-                    {stepProgress.filter(sp => sp.status === 'completed').length}/{PROGRAM_STEPS.length}
-                  </span>
-                </div>
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-[#2C5F6F] transition-all duration-500"
-                    style={{ 
-                      width: `${(stepProgress.filter(sp => sp.status === 'completed').length / PROGRAM_STEPS.length) * 100}%` 
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="col-span-9">
-            {currentStepData && (
-              <StepContent
-                step={currentStepData}
-                progress={currentProgress}
-                submissions={currentSubmissions}
-                onSubmit={handleSubmission}
-              />
-            )}
-          </div>
-
-        </div>
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-6 pb-24 relative z-10">
+        {currentStepData && (
+          <StepContent
+            step={currentStepData}
+            progress={currentProgress}
+            submissions={currentProgress?.submissions}
+            onSubmit={handleSubmit}
+          />
+        )}
       </div>
     </div>
   )
