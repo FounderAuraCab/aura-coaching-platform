@@ -164,7 +164,7 @@ export default function LoginPage() {
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1600880292203-757bb62b4baf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080')`,
+            backgroundImage: `url('https://i.ibb.co/rGH2s5Tv/jan-huber-B9w6-Tk-QVqcg-unsplash.jpg')`,
           }}
         >
           <div
