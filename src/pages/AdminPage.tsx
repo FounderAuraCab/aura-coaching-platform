@@ -3,14 +3,11 @@ import { motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { PROGRAM_STEPS } from '@/lib/program-data'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { 
   Users, ArrowLeft, CheckCircle, Clock, 
   RefreshCw, Eye, Send, Building2, UserCheck,
-  BarChart3
+  BarChart3, Lock, Hourglass
 } from 'lucide-react'
 import type { Profile, Program, StepProgress, Submission } from '@/types/database'
 
@@ -329,9 +326,9 @@ export default function AdminPage() {
 
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, string> = {
-      'PRESTATION': 'Prestation client',
+      'PRESTATION': 'Prestation',
       'DEVELOPPEMENT': 'Developpement',
-      'RELATION': 'Relation & coordination',
+      'RELATION': 'Relation',
       'ADMINISTRATIF': 'Administratif',
       'PAUSE': 'Pause'
     }
@@ -344,66 +341,31 @@ export default function AdminPage() {
       'DEVELOPPEMENT': 'bg-blue-100 text-blue-700',
       'RELATION': 'bg-purple-100 text-purple-700',
       'ADMINISTRATIF': 'bg-amber-100 text-amber-700',
-      'PAUSE': 'bg-gray-100 text-gray-700'
+      'PAUSE': 'bg-stone-100 text-stone-600'
     }
-    return colors[category] || 'bg-gray-100 text-gray-700'
+    return colors[category] || 'bg-stone-100 text-stone-600'
   }
 
-  const getRevenueLabel = (value: string | undefined) => {
-    if (!value) return '-'
-    const labels: Record<string, string> = {
-      'less_5k': '< 5 000 EUR',
-      '5k_10k': '5-10k EUR',
-      '10k_20k': '10-20k EUR',
-      '20k_50k': '20-50k EUR',
-      'more_50k': '> 50 000 EUR'
+  const getStatusConfig = (status: string) => {
+    const configs: Record<string, { label: string; color: string; icon: typeof CheckCircle }> = {
+      'completed': { label: 'Termine', color: 'bg-emerald-500', icon: CheckCircle },
+      'in_progress': { label: 'En cours', color: 'bg-stone-700', icon: Clock },
+      'pending_validation': { label: 'En analyse', color: 'bg-amber-500', icon: Hourglass },
+      'analysis_ready': { label: 'Analyse prete', color: 'bg-emerald-400', icon: Eye },
+      'locked': { label: 'Verrouille', color: 'bg-stone-300', icon: Lock }
     }
-    return labels[value] || value
-  }
-
-  const getTeamLabel = (value: string | undefined) => {
-    if (!value) return '-'
-    const labels: Record<string, string> = {
-      'solo': 'Seule',
-      '2_3': '2-3 pers.',
-      '4_6': '4-6 pers.',
-      '7_plus': '7+ pers.'
-    }
-    return labels[value] || value
-  }
-
-  const getHoursLabel = (value: string | undefined) => {
-    if (!value) return '-'
-    const labels: Record<string, string> = {
-      'less_35': '< 35h',
-      '35_45': '35-45h',
-      '45_55': '45-55h',
-      '55_65': '55-65h',
-      'more_65': '> 65h'
-    }
-    return labels[value] || value
-  }
-
-  const getProblemLabel = (value: string | undefined) => {
-    if (!value) return '-'
-    const labels: Record<string, string> = {
-      'time': 'Manque de temps',
-      'team': 'Equipe',
-      'revenue': 'CA',
-      'clients': 'Fidelisation',
-      'exhaustion': 'Epuisement'
-    }
-    return labels[value] || value
+    return configs[status] || configs['locked']
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
-        <div className="w-12 h-12 border-2 border-[#2C5F6F] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-stone-50">
+        <div className="w-10 h-10 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin" />
       </div>
     )
   }
 
+  // Client detail view
   if (selectedClient) {
     const awaitingAnalysis = selectedClient.stepProgress.filter(
       (sp: StepProgressWithDetails) => sp.status === 'pending_validation' && sp.steps?.number === 1
@@ -420,236 +382,217 @@ export default function AdminPage() {
     }, {})
 
     return (
-      <div className="min-h-screen" style={{ backgroundColor: '#F5F3EF' }}>
-        <div className="max-w-5xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={() => setSelectedClient(null)}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Retour
-              </Button>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '28px', color: '#2C2C2C' }}>
+      <div className="min-h-screen bg-stone-50">
+        {/* Header */}
+        <header className="bg-white border-b border-stone-200">
+          <div className="max-w-5xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setSelectedClient(null)}
+                  className="flex items-center gap-2 text-sm text-stone-500 hover:text-stone-700 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Retour
+                </button>
+                <div className="h-6 w-px bg-stone-200" />
+                <div>
+                  <h1 className="font-serif text-xl text-stone-800">
                     {selectedClient.profile.first_name} {selectedClient.profile.last_name}
                   </h1>
-                  <Badge variant={selectedClient.profile.plan === 'premium' ? 'success' : 'secondary'}>
-                    {selectedClient.profile.plan === 'premium' ? 'Premium' : 'Free'}
-                  </Badge>
-                </div>
-                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
-                  {selectedClient.profile.institute_name || selectedClient.profile.email}
-                </p>
-              </div>
-            </div>
-
-            {selectedClient.profile.plan === 'free' && (
-              <Button onClick={() => handleConvertToPremium(selectedClient.profile.id)} disabled={isProcessing}>
-                <UserCheck className="w-4 h-4 mr-2" />
-                Passer en Premium
-              </Button>
-            )}
-          </div>
-
-          {selectedClient.profile.onboarding_completed && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Building2 className="w-5 h-5" />
-                  Informations du diagnostic
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-[#F5F3EF] p-4" style={{ borderRadius: '1px' }}>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Institut</p>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                      {selectedClient.profile.institute_name || '-'}
-                    </p>
-                  </div>
-                  <div className="bg-[#F5F3EF] p-4" style={{ borderRadius: '1px' }}>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CA Mensuel</p>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                      {getRevenueLabel(selectedClient.profile.monthly_revenue)}
-                    </p>
-                  </div>
-                  <div className="bg-[#F5F3EF] p-4" style={{ borderRadius: '1px' }}>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Equipe</p>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                      {getTeamLabel(selectedClient.profile.team_size)}
-                    </p>
-                  </div>
-                  <div className="bg-[#F5F3EF] p-4" style={{ borderRadius: '1px' }}>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Heures/sem</p>
-                    <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                      {getHoursLabel(selectedClient.profile.hours_worked_per_week)}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 bg-amber-50 p-4" style={{ borderRadius: '1px' }}>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Probleme principal</p>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C2C2C', fontWeight: 500 }}>
-                    {getProblemLabel(selectedClient.profile.main_problem)}
+                  <p className="text-xs text-stone-500">
+                    {selectedClient.profile.institute_name || selectedClient.profile.email}
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <span className={`px-2 py-1 text-xs font-medium ${
+                  selectedClient.profile.plan === 'premium' 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : 'bg-stone-100 text-stone-600'
+                }`} style={{ borderRadius: '1px' }}>
+                  {selectedClient.profile.plan === 'premium' ? 'Premium' : 'Diagnostic'}
+                </span>
+              </div>
 
-          {hasTimeEntries && (
-            <Card className="mb-8">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  Donnees Time Study ({selectedClient.timeEntries?.total} entrees sur {selectedClient.timeEntries?.dates.length} jours)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-5 gap-2 mb-6">
-                  {Object.entries(selectedClient.timeEntries?.byCategory || {}).map(([cat, count]) => (
-                    <div key={cat} className={`p-3 text-center ${getCategoryColor(cat)}`} style={{ borderRadius: '1px' }}>
-                      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '20px', fontWeight: 600 }}>{count}</p>
-                      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '10px', textTransform: 'uppercase' }}>
-                        {getCategoryLabel(cat).split(' ')[0]}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+              {selectedClient.profile.plan === 'free' && (
+                <button
+                  onClick={() => handleConvertToPremium(selectedClient.profile.id)}
+                  disabled={isProcessing}
+                  className="flex items-center gap-2 px-4 py-2 bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50"
+                  style={{ borderRadius: '1px' }}
+                >
+                  <UserCheck className="w-4 h-4" />
+                  Passer en Premium
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
 
-                <div className="space-y-4 max-h-64 overflow-y-auto">
-                  {Object.entries(entriesByDate).slice(0, 5).map(([date, dateEntries]) => (
-                    <div key={date}>
-                      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888', marginBottom: '8px' }}>
-                        {new Date(date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {dateEntries.map((entry: TimeEntry) => (
-                          <span 
-                            key={entry.id} 
-                            className={`px-2 py-1 text-xs ${getCategoryColor(entry.category)}`}
-                            style={{ borderRadius: '1px' }}
-                          >
-                            {entry.hour_slot.split(' - ')[0]}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {canMarkComplete && (
-                  <Button 
-                    onClick={handleMarkTimeStudyComplete}
-                    disabled={isProcessing}
-                    className="w-full mt-6"
-                  >
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                    Marquer le Time Study comme termine et analyser
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {awaitingAnalysis.length > 0 && (
-            <Card className="mb-8 border-amber-300">
-              <CardHeader className="bg-amber-50">
-                <CardTitle className="flex items-center gap-2 text-amber-700">
-                  <Eye className="w-5 h-5" />
-                  Analyse a effectuer
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                {awaitingAnalysis.map((sp: StepProgressWithDetails) => (
-                  <div key={sp.id} className="space-y-4">
-                    <div>
-                      <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500 }}>
-                        Time Study termine - {selectedClient.timeEntries?.total} entrees collectees
-                      </p>
-                    </div>
-
-                    <div className="space-y-3">
-                      <label style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 500, color: '#5A5A5A' }}>
-                        Resume de l analyse (visible par le client)
-                      </label>
-                      <input
-                        type="text"
-                        value={analysisSummary}
-                        onChange={(e) => setAnalysisSummary(e.target.value)}
-                        placeholder="Ex: 12h perdues/semaine en taches delegables"
-                        className="w-full px-4 py-3 border border-gray-300 focus:border-[#2C5F6F] outline-none"
-                        style={{ borderRadius: '1px', fontFamily: 'Inter, sans-serif', fontSize: '14px' }}
-                      />
-                    </div>
-
-                    <Button 
-                      onClick={() => handleSendAnalysis(sp)}
-                      disabled={isProcessing || !analysisSummary.trim()}
-                      className="w-full"
-                    >
-                      <Send className="w-4 h-4 mr-2" />
-                      Envoyer l analyse et notifier le client
-                    </Button>
+        <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+          {/* Onboarding Info */}
+          {selectedClient.profile.onboarding_completed && (
+            <div className="bg-white p-6 border border-stone-200" style={{ borderRadius: '1px' }}>
+              <h2 className="flex items-center gap-2 text-sm font-medium text-stone-700 uppercase tracking-wider mb-4">
+                <Building2 className="w-4 h-4" />
+                Informations du diagnostic
+              </h2>
+              <div className="grid grid-cols-4 gap-4">
+                {[
+                  { label: 'Institut', value: selectedClient.profile.institute_name || '-' },
+                  { label: 'CA Mensuel', value: selectedClient.profile.monthly_revenue || '-' },
+                  { label: 'Equipe', value: selectedClient.profile.team_size || '-' },
+                  { label: 'Heures/sem', value: selectedClient.profile.hours_worked_per_week || '-' },
+                ].map((item, i) => (
+                  <div key={i} className="bg-stone-50 p-4" style={{ borderRadius: '1px' }}>
+                    <p className="text-[10px] text-stone-400 uppercase tracking-wider mb-1">{item.label}</p>
+                    <p className="text-sm text-stone-700 font-medium">{item.value}</p>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+              {selectedClient.profile.main_problem && (
+                <div className="mt-4 bg-amber-50 p-4" style={{ borderRadius: '1px' }}>
+                  <p className="text-[10px] text-stone-400 uppercase tracking-wider mb-1">Probleme principal</p>
+                  <p className="text-sm text-stone-700 font-medium">{selectedClient.profile.main_problem}</p>
+                </div>
+              )}
+            </div>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Progression du programme</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {PROGRAM_STEPS.map((step) => {
-                  const progress = selectedClient.stepProgress.find((sp: StepProgressWithDetails) => sp.steps?.number === step.number)
-                  const status = progress?.status || 'locked'
-
-                  return (
-                    <div key={step.number} className="flex items-center gap-4 p-4 bg-[#F5F3EF]" style={{ borderRadius: '1px' }}>
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        status === 'completed' ? 'bg-emerald-500 text-white' :
-                        status === 'in_progress' ? 'bg-[#2C5F6F] text-white' :
-                        status === 'pending_validation' ? 'bg-amber-500 text-white' :
-                        status === 'analysis_ready' ? 'bg-emerald-400 text-white' :
-                        'bg-gray-300 text-gray-500'
-                      }`}>
-                        {step.number}
-                      </div>
-                      <div className="flex-1">
-                        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500, color: '#2C2C2C' }}>
-                          {step.title}
-                        </p>
-                        <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                          {step.subtitle}
-                        </p>
-                      </div>
-                      <Badge variant={
-                        status === 'completed' ? 'success' :
-                        status === 'in_progress' ? 'pending' :
-                        status === 'pending_validation' ? 'warning' :
-                        status === 'analysis_ready' ? 'success' :
-                        'locked'
-                      }>
-                        {status === 'completed' ? 'Termine' :
-                         status === 'in_progress' ? 'En cours' :
-                         status === 'pending_validation' ? 'En analyse' :
-                         status === 'analysis_ready' ? 'Analyse prete' :
-                         'Verrouille'}
-                      </Badge>
-                    </div>
-                  )
-                })}
+          {/* Time Study Data */}
+          {hasTimeEntries && (
+            <div className="bg-white p-6 border border-stone-200" style={{ borderRadius: '1px' }}>
+              <h2 className="flex items-center gap-2 text-sm font-medium text-stone-700 uppercase tracking-wider mb-4">
+                <BarChart3 className="w-4 h-4" />
+                Time Study ({selectedClient.timeEntries?.total} entrees sur {selectedClient.timeEntries?.dates.length} jours)
+              </h2>
+              
+              <div className="grid grid-cols-5 gap-2 mb-6">
+                {Object.entries(selectedClient.timeEntries?.byCategory || {}).map(([cat, count]) => (
+                  <div key={cat} className={`p-3 text-center ${getCategoryColor(cat)}`} style={{ borderRadius: '1px' }}>
+                    <p className="text-xl font-semibold">{count}</p>
+                    <p className="text-[10px] uppercase tracking-wider">{getCategoryLabel(cat)}</p>
+                  </div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
+
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {Object.entries(entriesByDate).slice(0, 5).map(([date, dateEntries]) => (
+                  <div key={date}>
+                    <p className="text-xs text-stone-400 mb-2">
+                      {new Date(date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {dateEntries.map((entry: TimeEntry) => (
+                        <span 
+                          key={entry.id} 
+                          className={`px-2 py-1 text-xs ${getCategoryColor(entry.category)}`}
+                          style={{ borderRadius: '1px' }}
+                        >
+                          {entry.hour_slot.split(' - ')[0]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {canMarkComplete && (
+                <button
+                  onClick={handleMarkTimeStudyComplete}
+                  disabled={isProcessing}
+                  className="w-full mt-6 flex items-center justify-center gap-2 px-4 py-3 bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50"
+                  style={{ borderRadius: '1px' }}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Marquer comme termine et analyser
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Analysis Section */}
+          {awaitingAnalysis.length > 0 && (
+            <div className="bg-amber-50 p-6 border border-amber-200" style={{ borderRadius: '1px' }}>
+              <h2 className="flex items-center gap-2 text-sm font-medium text-amber-700 uppercase tracking-wider mb-4">
+                <Eye className="w-4 h-4" />
+                Analyse a effectuer
+              </h2>
+              
+              {awaitingAnalysis.map((sp: StepProgressWithDetails) => (
+                <div key={sp.id} className="space-y-4">
+                  <p className="text-sm text-stone-600">
+                    Time Study termine - {selectedClient.timeEntries?.total} entrees collectees
+                  </p>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 uppercase tracking-wider mb-2">
+                      Resume de l'analyse (visible par le client)
+                    </label>
+                    <input
+                      type="text"
+                      value={analysisSummary}
+                      onChange={(e) => setAnalysisSummary(e.target.value)}
+                      placeholder="Ex: 12h perdues/semaine en taches delegables"
+                      className="w-full px-4 py-3 bg-white border border-stone-200 text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400"
+                      style={{ borderRadius: '1px' }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => handleSendAnalysis(sp)}
+                    disabled={isProcessing || !analysisSummary.trim()}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50"
+                    style={{ borderRadius: '1px' }}
+                  >
+                    <Send className="w-4 h-4" />
+                    Envoyer l'analyse
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Progress Overview */}
+          <div className="bg-white p-6 border border-stone-200" style={{ borderRadius: '1px' }}>
+            <h2 className="text-sm font-medium text-stone-700 uppercase tracking-wider mb-4">
+              Progression du programme
+            </h2>
+            <div className="space-y-3">
+              {PROGRAM_STEPS.map((step) => {
+                const progress = selectedClient.stepProgress.find((sp: StepProgressWithDetails) => sp.steps?.number === step.number)
+                const status = progress?.status || 'locked'
+                const config = getStatusConfig(status)
+                const StatusIcon = config.icon
+
+                return (
+                  <div key={step.number} className="flex items-center gap-4 p-4 bg-stone-50" style={{ borderRadius: '1px' }}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${config.color}`}>
+                      <StatusIcon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-stone-700">{step.title}</p>
+                      <p className="text-xs text-stone-400">{step.subtitle}</p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs ${
+                      status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                      status === 'in_progress' ? 'bg-stone-200 text-stone-700' :
+                      status === 'pending_validation' ? 'bg-amber-100 text-amber-700' :
+                      status === 'analysis_ready' ? 'bg-emerald-100 text-emerald-700' :
+                      'bg-stone-100 text-stone-400'
+                    }`} style={{ borderRadius: '1px' }}>
+                      {config.label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
-  const freeClients = clients.filter(c => c.profile.plan === 'free')
+  // Clients list view
   const premiumClients = clients.filter(c => c.profile.plan === 'premium')
   const awaitingAnalysisCount = clients.filter(c => 
     c.stepProgress.some((sp: StepProgressWithDetails) => sp.status === 'pending_validation' && sp.steps?.number === 1)
@@ -657,185 +600,136 @@ export default function AdminPage() {
   const clientsWithTimeData = clients.filter(c => c.timeEntries && c.timeEntries.total > 0).length
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F3EF' }}>
+    <div className="min-h-screen bg-stone-50">
+      {/* Header */}
+      <header className="bg-white border-b border-stone-200">
+        <div className="max-w-5xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="font-serif text-2xl text-stone-800">Administration</h1>
+              <p className="text-xs text-stone-400 mt-1">Gestion des clients Altarys Conseil</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={fetchClients}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 transition-colors"
+                style={{ borderRadius: '1px' }}
+              >
+                <RefreshCw className="w-4 h-4" />
+                Actualiser
+              </button>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center gap-2 px-4 py-2 text-stone-500 text-sm hover:text-stone-700 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Mon espace
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
       <div className="max-w-5xl mx-auto px-6 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 style={{ fontFamily: 'Playfair Display, serif', fontSize: '32px', color: '#2C2C2C' }}>
-              Administration
-            </h1>
-            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
-              Gestion des clients et validations
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={fetchClients}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Actualiser
-            </Button>
-            <Button variant="ghost" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Mon espace
-            </Button>
-          </div>
-        </div>
-
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
+          {[
+            { label: 'Total clients', value: clients.length, icon: Users, color: 'text-stone-600' },
+            { label: 'Time Study actif', value: clientsWithTimeData, icon: BarChart3, color: 'text-blue-600' },
+            { label: 'Analyses a faire', value: awaitingAnalysisCount, icon: Eye, color: 'text-amber-600' },
+            { label: 'Premium', value: premiumClients.length, icon: CheckCircle, color: 'text-emerald-600' },
+          ].map((stat, i) => (
+            <div key={i} className="bg-white p-6 border border-stone-200" style={{ borderRadius: '1px' }}>
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-[#2C5F6F]/10 flex items-center justify-center">
-                  <Users className="w-6 h-6 text-[#2C5F6F]" />
+                <div className={`w-12 h-12 rounded-full bg-stone-50 flex items-center justify-center ${stat.color}`}>
+                  <stat.icon className="w-6 h-6" />
                 </div>
                 <div>
-                  <p style={{ fontFamily: 'Playfair Display, serif', fontSize: '28px', color: '#2C2C2C' }}>
-                    {clients.length}
-                  </p>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                    Total clients
-                  </p>
+                  <p className="font-serif text-3xl text-stone-800">{stat.value}</p>
+                  <p className="text-xs text-stone-400">{stat.label}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <BarChart3 className="w-6 h-6 text-blue-500" />
-                </div>
-                <div>
-                  <p style={{ fontFamily: 'Playfair Display, serif', fontSize: '28px', color: '#2C2C2C' }}>
-                    {clientsWithTimeData}
-                  </p>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                    Time Study actif
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
-                  <Eye className="w-6 h-6 text-amber-500" />
-                </div>
-                <div>
-                  <p style={{ fontFamily: 'Playfair Display, serif', fontSize: '28px', color: '#2C2C2C' }}>
-                    {awaitingAnalysisCount}
-                  </p>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                    Analyses a faire
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-emerald-500" />
-                </div>
-                <div>
-                  <p style={{ fontFamily: 'Playfair Display, serif', fontSize: '28px', color: '#2C2C2C' }}>
-                    {premiumClients.length}
-                  </p>
-                  <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                    Premium
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          ))}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
+        {/* Clients List */}
+        <div className="bg-white border border-stone-200" style={{ borderRadius: '1px' }}>
+          <div className="px-6 py-4 border-b border-stone-100">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-stone-700 uppercase tracking-wider">
+              <Users className="w-4 h-4" />
               Clients
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {clients.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#888' }}>
-                  Aucun client pour le moment
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {clients.map((client) => {
-                  const needsAnalysis = client.stepProgress.some(
-                    (sp: StepProgressWithDetails) => sp.status === 'pending_validation' && sp.steps?.number === 1
-                  )
-                  const completedSteps = client.stepProgress.filter((sp: StepProgressWithDetails) => sp.status === 'completed').length
-                  const hasTimeData = client.timeEntries && client.timeEntries.total > 0
+            </h2>
+          </div>
+          
+          {clients.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 text-stone-200 mx-auto mb-4" />
+              <p className="text-sm text-stone-400">Aucun client pour le moment</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-100">
+              {clients.map((client) => {
+                const needsAnalysis = client.stepProgress.some(
+                  (sp: StepProgressWithDetails) => sp.status === 'pending_validation' && sp.steps?.number === 1
+                )
+                const completedSteps = client.stepProgress.filter((sp: StepProgressWithDetails) => sp.status === 'completed').length
+                const hasTimeData = client.timeEntries && client.timeEntries.total > 0
 
-                  return (
-                    <motion.div
-                      key={client.profile.id}
-                      className="flex items-center justify-between p-4 bg-[#FEFDFB] border border-gray-200 cursor-pointer hover:border-[#2C5F6F] transition-colors"
-                      style={{ borderRadius: '1px' }}
-                      onClick={() => setSelectedClient(client)}
-                      whileHover={{ x: 4 }}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${
-                            client.profile.plan === 'premium' ? 'bg-emerald-500' : 'bg-[#2C5F6F]'
-                          }`}
-                          style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500 }}
-                        >
-                          {client.profile.first_name[0]}{client.profile.last_name[0]}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500, color: '#2C2C2C' }}>
-                              {client.profile.first_name} {client.profile.last_name}
-                            </p>
-                            <Badge variant={client.profile.plan === 'premium' ? 'success' : 'secondary'} className="text-xs">
-                              {client.profile.plan === 'premium' ? 'Premium' : 'Free'}
-                            </Badge>
-                          </div>
-                          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#888' }}>
-                            {client.profile.institute_name || client.profile.email}
-                          </p>
-                        </div>
+                return (
+                  <motion.div
+                    key={client.profile.id}
+                    className="flex items-center justify-between p-4 hover:bg-stone-50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedClient(client)}
+                    whileHover={{ x: 4 }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-medium ${
+                        client.profile.plan === 'premium' ? 'bg-emerald-500' : 'bg-stone-600'
+                      }`}>
+                        {client.profile.first_name[0]}{client.profile.last_name[0]}
                       </div>
-                      <div className="flex items-center gap-4">
-                        {hasTimeData && (
-                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1" style={{ borderRadius: '1px' }}>
-                            {client.timeEntries?.total} entrees
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-stone-700">
+                            {client.profile.first_name} {client.profile.last_name}
+                          </p>
+                          <span className={`px-2 py-0.5 text-[10px] font-medium ${
+                            client.profile.plan === 'premium' 
+                              ? 'bg-emerald-100 text-emerald-700' 
+                              : 'bg-stone-100 text-stone-500'
+                          }`} style={{ borderRadius: '1px' }}>
+                            {client.profile.plan === 'premium' ? 'Premium' : 'Free'}
                           </span>
-                        )}
-                        <div className="text-right">
-                          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', color: '#5A5A5A' }}>
-                            Bloc {client.program.current_step}/5
-                          </p>
-                          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888' }}>
-                            {completedSteps} termine{completedSteps > 1 ? 's' : ''}
-                          </p>
                         </div>
-                        {needsAnalysis && (
-                          <Badge variant="warning">
-                            Analyse requise
-                          </Badge>
-                        )}
+                        <p className="text-xs text-stone-400">
+                          {client.profile.institute_name || client.profile.email}
+                        </p>
                       </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      {hasTimeData && (
+                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1" style={{ borderRadius: '1px' }}>
+                          {client.timeEntries?.total} entrees
+                        </span>
+                      )}
+                      <div className="text-right">
+                        <p className="text-xs text-stone-500">Bloc {client.program.current_step}/5</p>
+                        <p className="text-[10px] text-stone-400">{completedSteps} termine{completedSteps > 1 ? 's' : ''}</p>
+                      </div>
+                      {needsAnalysis && (
+                        <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1" style={{ borderRadius: '1px' }}>
+                          Analyse requise
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
