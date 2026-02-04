@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'motion/react'
 import { useAuth } from '@/contexts/AuthContext'
 import { PROGRAM_STEPS } from '@/lib/program-data'
-import { ProgressHeader } from '@/components/dashboard/ProgressHeader'
 import { StepContent } from '@/components/dashboard/StepContent'
 import { toast } from 'sonner'
+import { LogOut, CheckCircle2, Clock, Lock, Hourglass, Eye } from 'lucide-react'
 import type { Program, StepProgress, Submission } from '@/types/database'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -75,7 +75,7 @@ const patchWithAuth = async (endpoint: string, token: string, body: any) => {
 }
 
 export default function DashboardPage() {
-  const { user, profile, session } = useAuth()
+  const { user, profile, session, signOut } = useAuth()
   const [program, setProgram] = useState<Program | null>(null)
   const [stepProgress, setStepProgress] = useState<StepProgressWithSubmissions[]>([])
   const [activeStep, setActiveStep] = useState(1)
@@ -83,7 +83,6 @@ export default function DashboardPage() {
 
   const isFreePlan = profile?.plan === 'free'
 
-  // Fetch program and progress data
   const fetchData = async () => {
     const token = getToken(session)
     if (!token || !user) {
@@ -92,7 +91,6 @@ export default function DashboardPage() {
     }
 
     try {
-      // Fetch user's program
       const programs = await fetchWithAuth(`programs?select=*&user_id=eq.${user.id}`, token)
 
       if (!programs || programs.length === 0 || programs.error) {
@@ -105,14 +103,12 @@ export default function DashboardPage() {
       setProgram(programData)
       setActiveStep(programData.current_step || 1)
 
-      // Fetch step progress with submissions and steps info
       const progressData = await fetchWithAuth(
         `step_progress?select=*,submissions(*),steps(*)&program_id=eq.${programData.id}`,
         token
       )
 
       if (progressData && !progressData.error) {
-        // Trier par numero de step
         const sorted = progressData.sort((a: StepProgressWithSubmissions, b: StepProgressWithSubmissions) => 
           (a.steps?.number || 0) - (b.steps?.number || 0)
         )
@@ -130,32 +126,15 @@ export default function DashboardPage() {
     fetchData()
   }, [user])
 
-  // Calculate overall progress
   const progressPercentage = useMemo(() => {
     if (!stepProgress.length) return 0
     const completed = stepProgress.filter(p => p.status === 'completed').length
     return Math.round((completed / PROGRAM_STEPS.length) * 100)
   }, [stepProgress])
 
-  // Prepare steps with status for header
-  const headerSteps = useMemo(() => {
-    return PROGRAM_STEPS.map(step => {
-      const progress = stepProgress.find(p => p.steps?.number === step.number)
-
-      return {
-        number: step.number,
-        label: step.title.split(' ')[0],
-        isActive: step.number === activeStep,
-        isCompleted: progress?.status === 'completed',
-      }
-    })
-  }, [stepProgress, activeStep])
-
-  // Get current step data
   const currentStepData = PROGRAM_STEPS.find(s => s.number === activeStep)
   const currentProgress = stepProgress.find(p => p.steps?.number === activeStep)
 
-  // Handle submission
   const handleSubmit = async (data: { 
     type: 'link' | 'file'
     content: string
@@ -169,7 +148,6 @@ export default function DashboardPage() {
     }
 
     try {
-      // Create submission
       const submitResult = await postWithAuth('submissions', token, {
         step_progress_id: currentProgress.id,
         user_id: user?.id,
@@ -182,14 +160,12 @@ export default function DashboardPage() {
 
       if (submitResult.error) throw new Error(submitResult.error.message)
 
-      // Update step progress to pending validation
       await patchWithAuth(
         `step_progress?id=eq.${currentProgress.id}`,
         token,
         { status: 'pending_validation' }
       )
 
-      // Create notification for admin
       const admins = await fetchWithAuth(`profiles?select=id&role=eq.admin`, token)
 
       if (admins && !admins.error) {
@@ -209,8 +185,6 @@ export default function DashboardPage() {
       }
 
       toast.success('Soumission envoyee avec succes !')
-      
-      // Refresh data
       fetchData()
 
     } catch (error) {
@@ -220,12 +194,10 @@ export default function DashboardPage() {
     }
   }
 
-  // Check if step is accessible
   const isStepAccessible = (stepNumber: number) => {
     const progress = stepProgress.find(p => p.steps?.number === stepNumber)
     if (!progress) return stepNumber === 1
     
-    // Pour les users free, seul le bloc 1 est accessible
     if (isFreePlan && stepNumber > 1) {
       return progress.status === 'completed'
     }
@@ -233,84 +205,118 @@ export default function DashboardPage() {
     return progress.status !== 'locked'
   }
 
+  const getStepStatus = (stepNumber: number) => {
+    const progress = stepProgress.find(p => p.steps?.number === stepNumber)
+    return progress?.status || 'locked'
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return CheckCircle2
+      case 'in_progress': return Clock
+      case 'pending_validation': return Hourglass
+      case 'analysis_ready': return Eye
+      default: return Lock
+    }
+  }
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F3EF' }}>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
-        >
-          <div className="w-12 h-12 border-2 border-[#2C5F6F] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A' }}>
-            Chargement...
-          </p>
-        </motion.div>
+      <div className="min-h-screen flex items-center justify-center bg-stone-50">
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-stone-500">Chargement...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div
-      className="min-h-screen relative overflow-hidden"
-      style={{
-        backgroundColor: '#F5F3EF',
-        backgroundImage: `
-          radial-gradient(circle at 50% 0%, rgba(245, 243, 239, 1) 0%, rgba(238, 235, 229, 1) 100%)
-        `,
-      }}
-    >
-      {/* Texture overlay */}
-      <div
-        className="fixed inset-0 pointer-events-none opacity-[0.035]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='paperTexture'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' seed='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paperTexture)' opacity='0.5'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '150px 150px',
-          mixBlendMode: 'multiply',
-        }}
-      />
+    <div className="min-h-screen bg-stone-50">
+      {/* Header */}
+      <header className="bg-white border-b border-stone-200">
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="font-serif text-2xl text-stone-800">Altarys Conseil</h1>
+              <p className="text-[10px] font-medium tracking-[0.15em] uppercase text-stone-400 mt-1">
+                Programme d'accompagnement
+              </p>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <p className="text-sm text-stone-700">{profile?.first_name} {profile?.last_name}</p>
+                <p className="text-xs text-stone-400">
+                  {profile?.plan === 'premium' ? 'Premium' : 'Diagnostic'}
+                </p>
+              </div>
+              <button 
+                onClick={() => signOut()}
+                className="p-2 text-stone-400 hover:text-stone-600 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-      {/* Progress Header */}
-      <ProgressHeader steps={headerSteps} progressPercentage={progressPercentage} />
+      {/* Progress Bar */}
+      <div className="bg-white border-b border-stone-100">
+        <div className="max-w-6xl mx-auto px-6 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-stone-500">Progression globale</span>
+            <span className="text-xs font-medium text-stone-700">{progressPercentage}%</span>
+          </div>
+          <div className="w-full h-1 bg-stone-100 rounded-full overflow-hidden">
+            <motion.div 
+              className="h-full bg-stone-800"
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPercentage}%` }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Step Navigation */}
-      <div className="max-w-5xl mx-auto px-6 pb-4">
-        <div className="flex gap-2">
-          {PROGRAM_STEPS.map((step) => {
-            const progress = stepProgress.find(p => p.steps?.number === step.number)
-            const isLocked = !isStepAccessible(step.number)
-            const isCurrent = step.number === activeStep
-            const isBlockedForFree = isFreePlan && step.number > 1 && progress?.status !== 'completed'
+      <div className="bg-white border-b border-stone-100">
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex gap-2">
+            {PROGRAM_STEPS.map((step) => {
+              const status = getStepStatus(step.number)
+              const isLocked = !isStepAccessible(step.number)
+              const isCurrent = step.number === activeStep
+              const isBlockedForFree = isFreePlan && step.number > 1 && status !== 'completed'
+              const StatusIcon = getStatusIcon(status)
 
-            return (
-              <button
-                key={step.number}
-                onClick={() => !isLocked && !isBlockedForFree && setActiveStep(step.number)}
-                disabled={isLocked || isBlockedForFree}
-                className={`px-4 py-2 whitespace-nowrap transition-all ${
-                  isCurrent
-                    ? 'bg-[#2C5F6F] text-white'
-                    : isLocked || isBlockedForFree
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-white text-[#5A5A5A] hover:bg-[#E8E5DF]'
-                }`}
-                style={{
-                  borderRadius: '1px',
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                }}
-              >
-                {step.number}. {step.title}
-              </button>
-            )
-          })}
+              return (
+                <button
+                  key={step.number}
+                  onClick={() => !isLocked && !isBlockedForFree && setActiveStep(step.number)}
+                  disabled={isLocked || isBlockedForFree}
+                  className={`flex items-center gap-2 px-4 py-2 transition-all ${
+                    isCurrent
+                      ? 'bg-stone-800 text-white'
+                      : isLocked || isBlockedForFree
+                      ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                      : 'bg-stone-50 text-stone-600 hover:bg-stone-100'
+                  }`}
+                  style={{ borderRadius: '1px' }}
+                >
+                  <StatusIcon className="w-4 h-4" />
+                  <span className="text-xs font-medium tracking-wide">
+                    {step.number}. {step.title}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-6 pb-24 relative z-10">
+      <div className="max-w-4xl mx-auto px-6 py-8">
         {currentStepData && (
           <StepContent
             step={currentStepData}
@@ -320,6 +326,13 @@ export default function DashboardPage() {
           />
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="py-8 text-center">
+        <p className="text-[10px] text-stone-300 tracking-widest uppercase">
+          Altarys Conseil - Accompagnement operationnel
+        </p>
+      </footer>
     </div>
   )
 }
