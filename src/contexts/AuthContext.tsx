@@ -3,6 +3,9 @@ import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/types/database'
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 interface AuthContextType {
   user: User | null
   profile: Profile | null
@@ -24,111 +27,118 @@ interface SignUpMetadata {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Helper pour obtenir le token depuis localStorage
+const getStoredSession = () => {
+  try {
+    const storageKey = `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`
+    const stored = localStorage.getItem(storageKey)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (e) {
+    console.error('Error getting stored session:', e)
+  }
+  return null
+}
+
+// Fetch profile avec fetch direct (contourne le bug Web Locks)
+const fetchProfileDirect = async (userId: string, token: string): Promise<Profile | null> => {
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`,
+      {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+    const data = await response.json()
+    if (data && data.length > 0) {
+      return data[0]
+    }
+    return null
+  } catch (e) {
+    console.error('Error fetching profile:', e)
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      
-      if (error) {
-        console.error('Error fetching profile:', error)
-        return null
-      }
-      return data
-    } catch (e) {
-      console.error('Exception fetching profile:', e)
-      return null
-    }
-  }
-
   useEffect(() => {
     let isMounted = true
-    let timeoutId: NodeJS.Timeout
 
     const init = async () => {
       try {
-        // Timeout de securite - 5 secondes max
-        timeoutId = setTimeout(() => {
-          if (isMounted && isLoading) {
-            console.log('Auth timeout - forcing load complete')
-            setIsLoading(false)
-          }
-        }, 5000)
+        // Verifier d'abord le localStorage
+        const storedSession = getStoredSession()
+        
+        if (storedSession?.access_token && storedSession?.user) {
+          console.log('Found stored session, validating...')
+          
+          // Essayer de rafraichir la session pour s'assurer qu'elle est valide
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+            refresh_token: storedSession.refresh_token
+          })
 
-        // Essayer getSession d'abord
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession()
+          if (!isMounted) return
+
+          if (refreshError) {
+            console.log('Refresh failed, clearing session:', refreshError.message)
+            // Session invalide, nettoyer
+            const storageKey = `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`
+            localStorage.removeItem(storageKey)
+            setIsLoading(false)
+            return
+          }
+
+          if (refreshData.session) {
+            console.log('Session refreshed successfully')
+            setSession(refreshData.session)
+            setUser(refreshData.session.user)
+            
+            // Fetch profile avec fetch direct
+            const profileData = await fetchProfileDirect(
+              refreshData.session.user.id,
+              refreshData.session.access_token
+            )
+            
+            if (isMounted && profileData) {
+              setProfile(profileData)
+            }
+            
+            setIsLoading(false)
+            return
+          }
+        }
+
+        // Pas de session stockee, essayer getSession (pour le cas de connexion initiale)
+        const { data: { session: currentSession } } = await supabase.auth.getSession()
         
         if (!isMounted) return
-
-        if (error) {
-          console.error('getSession error:', error)
-        }
 
         if (currentSession?.user) {
           console.log('Session found via getSession')
           setSession(currentSession)
           setUser(currentSession.user)
           
-          const profileData = await fetchProfile(currentSession.user.id)
+          const profileData = await fetchProfileDirect(
+            currentSession.user.id,
+            currentSession.access_token
+          )
+          
           if (isMounted && profileData) {
             setProfile(profileData)
           }
-          setIsLoading(false)
-          return
         }
 
-        // Si pas de session via getSession, verifier localStorage directement
-        const storageKey = `sb-${new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0]}-auth-token`
-        const storedSession = localStorage.getItem(storageKey)
-        
-        if (storedSession) {
-          try {
-            const parsed = JSON.parse(storedSession)
-            if (parsed?.access_token && parsed?.user) {
-              console.log('Session found in localStorage, refreshing...')
-              
-              // Essayer de rafraichir la session
-              const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
-                refresh_token: parsed.refresh_token
-              })
-
-              if (!isMounted) return
-
-              if (refreshError) {
-                console.error('Refresh error:', refreshError)
-                // Token expire, nettoyer
-                localStorage.removeItem(storageKey)
-                setIsLoading(false)
-                return
-              }
-
-              if (refreshData.session) {
-                console.log('Session refreshed successfully')
-                setSession(refreshData.session)
-                setUser(refreshData.session.user)
-                
-                const profileData = await fetchProfile(refreshData.session.user.id)
-                if (isMounted && profileData) {
-                  setProfile(profileData)
-                }
-              }
-            }
-          } catch (e) {
-            console.error('Error parsing stored session:', e)
-          }
-        }
-
-        if (isMounted) {
-          setIsLoading(false)
-        }
+        setIsLoading(false)
       } catch (error) {
         console.error('Auth init error:', error)
         if (isMounted) {
@@ -150,23 +160,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(null)
           setUser(null)
           setProfile(null)
+          setIsLoading(false)
         } else if (newSession?.user) {
           setSession(newSession)
           setUser(newSession.user)
           
-          const profileData = await fetchProfile(newSession.user.id)
+          // Fetch profile avec fetch direct
+          const profileData = await fetchProfileDirect(
+            newSession.user.id,
+            newSession.access_token
+          )
+          
           if (isMounted && profileData) {
             setProfile(profileData)
           }
+          
+          setIsLoading(false)
         }
-        
-        setIsLoading(false)
       }
     )
 
     return () => {
       isMounted = false
-      clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
   }, [])
@@ -197,8 +212,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshProfile = async () => {
-    if (user) {
-      const profileData = await fetchProfile(user.id)
+    if (user && session) {
+      const profileData = await fetchProfileDirect(user.id, session.access_token)
       if (profileData) setProfile(profileData)
     }
   }
