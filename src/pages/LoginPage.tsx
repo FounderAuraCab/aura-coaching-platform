@@ -28,36 +28,20 @@ export default function LoginPage() {
     if (error) {
       toast.error('Identifiants incorrects')
     } else {
-      toast.success('Connexion réussie')
+      toast.success('Connexion reussie')
       navigate('/dashboard')
     }
   }
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: '#F5F3EF' }}>
+    <div className="min-h-screen flex bg-stone-50">
       {/* Left Side - Login Form */}
       <motion.div
-        className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12 relative"
-        style={{
-          backgroundColor: '#FEFDFB',
-          backgroundImage: `
-            radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.8) 0%, rgba(254, 253, 251, 1) 100%)
-          `,
-        }}
+        className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12 relative bg-white"
         initial={{ opacity: 0, x: -50 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* Fine paper texture */}
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.03]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='loginPaper'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23loginPaper)' opacity='0.6'/%3E%3C/svg%3E")`,
-            backgroundSize: '140px 140px',
-            mixBlendMode: 'multiply',
-          }}
-        />
-
         <div className="w-full max-w-md relative z-10">
           {/* Logo */}
           <motion.div
@@ -66,47 +50,23 @@ export default function LoginPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3 }}
           >
-            <div
-              className="mb-4"
-              style={{
-                fontFamily: 'Playfair Display, serif',
-                fontSize: '40px',
-                fontWeight: 400,
-                letterSpacing: '0.03em',
-                color: '#2C2C2C',
-              }}
-            >
-              AURA
-            </div>
-            <div
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '10px',
-                fontWeight: 500,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase',
-                color: '#2C5F6F',
-              }}
-            >
-              Cabinet de conseil
-            </div>
+            <h1 className="font-serif text-4xl tracking-tight text-stone-800 mb-3">
+              Altarys Conseil
+            </h1>
+            <p className="text-[10px] font-medium tracking-[0.2em] uppercase text-stone-400">
+              Accompagnement operationnel
+            </p>
           </motion.div>
 
           {/* Welcome Text */}
-          <motion.h1
-            className="text-center mb-12"
-            style={{
-              fontFamily: 'Playfair Display, serif',
-              fontSize: '32px',
-              fontWeight: 400,
-              color: '#2C2C2C',
-            }}
+          <motion.h2
+            className="text-center mb-12 font-serif text-3xl text-stone-800"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.5 }}
           >
             Bienvenue
-          </motion.h1>
+          </motion.h2>
 
           {/* Login Form */}
           <motion.form
@@ -116,66 +76,69 @@ export default function LoginPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.7 }}
           >
-            <Input
-              type="email"
-              label="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="prenom.nom@entreprise.fr"
-              required
-              disabled={isLoading}
-            />
+            <div>
+              <label className="block text-xs font-medium text-stone-500 uppercase tracking-wider mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="prenom.nom@entreprise.fr"
+                required
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-white border border-stone-200 text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors"
+                style={{ borderRadius: '1px' }}
+              />
+            </div>
 
-            <Input
-              type="password"
-              label="Mot de passe"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
-              required
-              disabled={isLoading}
-            />
+            <div>
+              <label className="block text-xs font-medium text-stone-500 uppercase tracking-wider mb-2">
+                Mot de passe
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-white border border-stone-200 text-stone-900 placeholder-stone-400 focus:outline-none focus:border-stone-400 transition-colors"
+                style={{ borderRadius: '1px' }}
+              />
+            </div>
 
             {/* Forgot Password Link */}
             <div className="text-right">
               <Link
                 to="/forgot-password"
-                style={{
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: '11px',
-                  fontWeight: 400,
-                  color: '#888',
-                  textDecoration: 'none',
-                }}
-                className="hover:text-[#2C5F6F] transition-colors"
+                className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
               >
-                Mot de passe oublié ?
+                Mot de passe oublie ?
               </Link>
             </div>
 
             {/* Login Button */}
-            <Button
+            <button
               type="submit"
-              className="w-full"
-              size="lg"
               disabled={isLoading}
+              className="w-full py-3 bg-stone-800 text-white text-sm font-medium uppercase tracking-wider hover:bg-stone-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ borderRadius: '1px' }}
             >
               {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              {isLoading ? 'Connexion...' : 'SE CONNECTER'}
-            </Button>
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Connexion...
+                </span>
+              ) : (
+                'Se connecter'
+              )}
+            </button>
           </motion.form>
 
           {/* Sign Up Link */}
           <motion.p
-            className="text-center mt-8"
-            style={{
-              fontFamily: 'Inter, sans-serif',
-              fontSize: '12px',
-              fontWeight: 400,
-              color: '#666',
-            }}
+            className="text-center mt-8 text-xs text-stone-500"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 1 }}
@@ -183,14 +146,9 @@ export default function LoginPage() {
             Nouveau client ?{' '}
             <Link
               to="/register"
-              style={{
-                color: '#2C5F6F',
-                textDecoration: 'underline',
-                fontWeight: 500,
-              }}
-              className="hover:text-[#234550] transition-colors"
+              className="text-stone-700 underline hover:text-stone-900 transition-colors font-medium"
             >
-              Créer un compte
+              Creer un compte
             </Link>
           </motion.p>
         </div>
@@ -206,17 +164,13 @@ export default function LoginPage() {
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1497366216548-37526070297c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBvZmZpY2UlMjBhcmNoaXRlY3R1cmV8ZW58MHx8fHwxNzM2ODAyNjgwfDA&ixlib=rb-4.1.0&q=80&w=1080')`,
+            backgroundImage: `url('https://images.unsplash.com/photo-1600880292203-757bb62b4baf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080')`,
           }}
         >
-          {/* Architectural overlay */}
           <div
             className="absolute inset-0"
             style={{
-              background: `
-                linear-gradient(135deg, rgba(44, 95, 111, 0.15) 0%, rgba(168, 153, 104, 0.08) 100%),
-                linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, transparent 50%)
-              `,
+              background: `linear-gradient(135deg, rgba(120, 113, 108, 0.2) 0%, rgba(168, 162, 158, 0.1) 100%)`,
             }}
           />
         </div>
