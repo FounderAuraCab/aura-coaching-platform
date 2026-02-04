@@ -4,8 +4,8 @@ import { useDropzone } from 'react-dropzone'
 import { 
   FileText, Calendar, Target, Users, BarChart3, Lightbulb, 
   CheckCircle, Settings, Rocket, Upload, Link as LinkIcon, 
-  ExternalLink, X, Loader2, Clock, CheckCircle2, AlertCircle,
-  Lock, Hourglass, Eye, CalendarCheck
+  ExternalLink, X, Loader2, Clock, CheckCircle2,
+  Lock, Hourglass, Eye, CalendarCheck, Smartphone
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,7 +25,7 @@ interface StepContentProps {
 }
 
 const iconMap: Record<string, typeof FileText> = {
-  FileText, Calendar, Target, Users, BarChart3, Lightbulb, CheckCircle, Settings, Rocket,
+  FileText, Calendar, Target, Users, BarChart3, Lightbulb, CheckCircle, Settings, Rocket, Smartphone,
 }
 
 type BadgeVariant = 'locked' | 'pending' | 'warning' | 'success' | 'destructive' | 'default' | 'secondary' | 'outline'
@@ -50,6 +50,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
 
   const isFreePlan = profile?.plan === 'free'
   const isFirstStep = step.number === 1
+  const isTimeStudy = step.isTimeStudy === true
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) setUploadedFile(acceptedFiles[0])
@@ -116,6 +117,10 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
   const isCompleted = status === 'completed'
   const canSubmit = status === 'in_progress'
   const isBlockedForFree = isFreePlan && !isFirstStep && status !== 'completed'
+
+  // Get app URL from deliverables if it's a Time Study step
+  const appDeliverable = step.deliverables?.find(d => d.type === 'app')
+  const appUrl = appDeliverable?.appUrl || 'https://altarys-conseil-app.vercel.app'
 
   return (
     <motion.div className="space-y-8" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
@@ -266,6 +271,45 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             </div>
           )}
 
+          {/* Time Study App Access */}
+          {isTimeStudy && canSubmit && !isBlockedForFree && (
+            <motion.div 
+              className="bg-[#2C5F6F]/5 border border-[#2C5F6F]/20 p-8 text-center"
+              style={{ borderRadius: '1px' }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <div className="w-16 h-16 rounded-full bg-[#2C5F6F] flex items-center justify-center mx-auto mb-6">
+                <Smartphone className="w-8 h-8 text-white" />
+              </div>
+              
+              <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', color: '#2C2C2C', marginBottom: '12px' }}>
+                Accedez a l application Time Study
+              </h3>
+              
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#5A5A5A', lineHeight: '1.7', marginBottom: '8px' }}>
+                Connectez-vous avec vos identifiants AURA pour commencer le suivi de votre temps.
+              </p>
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '13px', color: '#888', marginBottom: '24px' }}>
+                Chaque heure, indiquez votre activite principale. Objectif : 7 jours complets.
+              </p>
+
+              <Button 
+                size="lg"
+                className="bg-[#2C5F6F] hover:bg-[#234550]"
+                onClick={() => window.open(appUrl, '_blank')}
+              >
+                <ExternalLink className="w-5 h-5 mr-2" />
+                Ouvrir l application
+              </Button>
+
+              <p style={{ fontFamily: 'Inter, sans-serif', fontSize: '11px', color: '#888', marginTop: '16px' }}>
+                Vos donnees sont automatiquement synchronisees avec votre compte
+              </p>
+            </motion.div>
+          )}
+
+          {/* Resources - only for non-Time Study steps or if Time Study has additional resources */}
           {step.resources.length > 0 && !isPendingValidation && !isAnalysisReady && (
             <div className="space-y-4">
               <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>
@@ -273,6 +317,25 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
               </h3>
               <div className="grid gap-3">
                 {step.resources.map((resource, index) => {
+                  // Handle app type resource
+                  if (resource.type === 'app') {
+                    return (
+                      <a
+                        key={index}
+                        href={resource.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-4 bg-[#2C5F6F]/10 hover:bg-[#2C5F6F]/20 transition-colors group"
+                        style={{ borderRadius: '1px' }}
+                      >
+                        <Smartphone className="w-5 h-5 text-[#2C5F6F]" />
+                        <span className="flex-1" style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', color: '#2C5F6F', fontWeight: 500 }}>
+                          {resource.title}
+                        </span>
+                        <ExternalLink className="w-4 h-4 text-[#2C5F6F] group-hover:translate-x-1 transition-transform" />
+                      </a>
+                    )
+                  }
                   if (resource.type === 'disabled') {
                     return (
                       <div
@@ -342,10 +405,11 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
             </div>
           )}
 
-          {canSubmit && !isBlockedForFree && (
+          {/* Standard submission form - only for non-Time Study steps */}
+          {canSubmit && !isBlockedForFree && !isTimeStudy && (
             <div className="space-y-6 pt-6 border-t border-gray-200">
               <h3 style={{ fontFamily: 'Inter, sans-serif', fontSize: '12px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>
-                {isFirstStep ? 'Envoyer mon Time-Study pour analyse' : 'Soumettre un livrable'}
+                Soumettre un livrable
               </h3>
 
               <form onSubmit={handleLinkSubmit} className="space-y-4">
@@ -358,7 +422,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
                 />
                 <Button type="submit" variant="outline" className="w-full" disabled={isSubmitting || !linkUrl.trim()}>
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <LinkIcon className="w-4 h-4 mr-2" />}
-                  {isFirstStep ? 'Envoyer pour analyse' : 'Soumettre le lien'}
+                  Soumettre le lien
                 </Button>
               </form>
 
@@ -410,7 +474,7 @@ export function StepContent({ step, progress, submissions = [], onSubmit }: Step
               {uploadedFile && (
                 <Button onClick={handleFileSubmit} className="w-full" disabled={isSubmitting}>
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
-                  {isFirstStep ? 'Envoyer pour analyse' : 'Envoyer le fichier'}
+                  Envoyer le fichier
                 </Button>
               )}
             </div>
