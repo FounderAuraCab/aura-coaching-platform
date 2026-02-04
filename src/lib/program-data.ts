@@ -1,4 +1,4 @@
-import { FileText, Calendar, Target, Users, BarChart3, Lightbulb, CheckCircle, Settings, Rocket } from 'lucide-react'
+import { FileText, Calendar, Target, Users, BarChart3, Lightbulb, CheckCircle, Settings, Rocket, Smartphone } from 'lucide-react'
 
 export interface StepData {
   number: number
@@ -13,100 +13,104 @@ export interface StepData {
   deliverables: {
     title: string
     description: string
-    type: 'link' | 'file' | 'text'
+    type: 'link' | 'file' | 'text' | 'app'
     required: boolean
+    appUrl?: string
   }[]
   resources: {
     title: string
     url: string
-    type: 'template' | 'video' | 'guide' | 'tool'
+    type: 'template' | 'video' | 'guide' | 'tool' | 'app'
   }[]
+  isTimeStudy?: boolean
 }
 
 export const PROGRAM_STEPS: StepData[] = [
   {
     number: 1,
-    title: 'Diagnostic Opérationnel',
+    title: 'Diagnostic Operationnel',
     subtitle: 'Module Fondamental',
-    description: 'Analyser précisément votre allocation de temps et identifier les leviers d\'optimisation stratégique.',
+    description: 'Analyser precisement votre allocation de temps et identifier les leviers d\'optimisation strategique grace a notre outil de suivi.',
     durationWeeks: 2,
+    isTimeStudy: true,
     objectives: [
       {
-        icon: 'FileText',
-        text: 'Installer Google Sheets et créer une fiche simple de suivi de votre semaine sur 5 jours'
+        icon: 'Smartphone',
+        text: 'Acceder a l\'application Altarys Conseil avec vos identifiants AURA'
       },
       {
         icon: 'Calendar',
-        text: 'Tracker 7 jours complets par tranche de temps de 1h'
+        text: 'Tracker chaque heure de votre journee pendant 7 jours complets'
       },
       {
         icon: 'Target',
-        text: 'Envoyer le fichier complété pour validation et analyse'
+        text: 'Vos donnees sont automatiquement analysees par votre coach'
       }
     ],
     deliverables: [
       {
-        title: 'Tracker temps complété',
-        description: 'Lien vers votre Google Sheet avec 7 jours de tracking',
-        type: 'link',
-        required: true
+        title: 'Application Time Study',
+        description: 'Connectez-vous avec vos identifiants AURA pour commencer le suivi',
+        type: 'app',
+        required: true,
+        appUrl: 'https://altarys-conseil-app.vercel.app'
       }
     ],
     resources: [
       {
-        title: 'Template Tracker Temps',
-        url: 'https://docs.google.com/spreadsheets/d/TEMPLATE_ID',
-        type: 'template'
+        title: 'Acceder a l\'application',
+        url: 'https://altarys-conseil-app.vercel.app',
+        type: 'app'
       },
       {
-        title: 'Guide de remplissage',
-        url: '/guides/tracker-guide.pdf',
+        title: 'Guide d\'utilisation',
+        url: '/guides/time-study-guide.pdf',
         type: 'guide'
       }
     ]
   },
   {
     number: 2,
-    title: 'Planification Stratégique',
-    subtitle: 'Organisation & Priorités',
-    description: 'Définir vos priorités business et créer un système de planification efficace aligné avec vos objectifs.',
+    title: 'Planification Strategique',
+    subtitle: 'Organisation & Priorites',
+    description: 'Definir vos priorites business et creer un systeme de planification efficace aligne avec vos objectifs.',
     durationWeeks: 2,
     objectives: [
       {
         icon: 'Target',
-        text: 'Identifier vos 3 priorités business pour le trimestre'
+        text: 'Identifier vos 3 priorites business pour le trimestre'
       },
       {
         icon: 'Calendar',
-        text: 'Mettre en place votre système de planification hebdomadaire'
+        text: 'Mettre en place votre systeme de planification hebdomadaire'
       },
       {
         icon: 'CheckCircle',
-        text: 'Créer votre matrice de priorisation des tâches'
+        text: 'Creer votre matrice de priorisation des taches'
       }
     ],
     deliverables: [
       {
-        title: 'Plan stratégique trimestriel',
-        description: 'Document avec vos 3 priorités et leur déclinaison en actions',
+        title: 'Plan strategique trimestriel',
+        description: 'Document avec vos 3 priorites et leur declinaison en actions',
         type: 'file',
         required: true
       },
       {
         title: 'Planning hebdomadaire type',
-        description: 'Votre semaine type optimisée',
+        description: 'Votre semaine type optimisee',
         type: 'link',
         required: true
       }
     ],
     resources: [
       {
-        title: 'Template Plan Stratégique',
+        title: 'Template Plan Strategique',
         url: '/templates/plan-strategique.docx',
         type: 'template'
       },
       {
-        title: 'Vidéo : La méthode Eisenhower',
+        title: 'Video : La methode Eisenhower',
         url: 'https://www.youtube.com/watch?v=XXX',
         type: 'video'
       }
@@ -114,46 +118,46 @@ export const PROGRAM_STEPS: StepData[] = [
   },
   {
     number: 3,
-    title: 'Délégation Efficace',
-    subtitle: 'Libérer votre temps',
-    description: 'Identifier les tâches à déléguer et mettre en place des process de délégation efficaces.',
+    title: 'Delegation Efficace',
+    subtitle: 'Liberer votre temps',
+    description: 'Identifier les taches a deleguer et mettre en place des process de delegation efficaces.',
     durationWeeks: 3,
     objectives: [
       {
         icon: 'Users',
-        text: 'Cartographier toutes vos tâches récurrentes'
+        text: 'Cartographier toutes vos taches recurrentes'
       },
       {
         icon: 'Settings',
-        text: 'Créer des procédures de délégation documentées'
+        text: 'Creer des procedures de delegation documentees'
       },
       {
         icon: 'CheckCircle',
-        text: 'Former et accompagner sur les premières délégations'
+        text: 'Former et accompagner sur les premieres delegations'
       }
     ],
     deliverables: [
       {
-        title: 'Matrice de délégation',
-        description: 'Liste des tâches avec responsables assignés',
+        title: 'Matrice de delegation',
+        description: 'Liste des taches avec responsables assignes',
         type: 'file',
         required: true
       },
       {
-        title: 'Procédures documentées',
-        description: 'Au moins 3 procédures de tâches déléguées',
+        title: 'Procedures documentees',
+        description: 'Au moins 3 procedures de taches deleguees',
         type: 'file',
         required: true
       }
     ],
     resources: [
       {
-        title: 'Template Matrice Délégation',
+        title: 'Template Matrice Delegation',
         url: '/templates/matrice-delegation.xlsx',
         type: 'template'
       },
       {
-        title: 'Guide : Créer une procédure',
+        title: 'Guide : Creer une procedure',
         url: '/guides/creer-procedure.pdf',
         type: 'guide'
       }
@@ -162,8 +166,8 @@ export const PROGRAM_STEPS: StepData[] = [
   {
     number: 4,
     title: 'Optimisation des Process',
-    subtitle: 'Systématisation',
-    description: 'Automatiser et optimiser vos processus clés pour gagner en efficacité.',
+    subtitle: 'Systematisation',
+    description: 'Automatiser et optimiser vos processus cles pour gagner en efficacite.',
     durationWeeks: 3,
     objectives: [
       {
@@ -176,7 +180,7 @@ export const PROGRAM_STEPS: StepData[] = [
       },
       {
         icon: 'Rocket',
-        text: 'Implémenter au moins 2 automatisations'
+        text: 'Implementer au moins 2 automatisations'
       }
     ],
     deliverables: [
@@ -188,7 +192,7 @@ export const PROGRAM_STEPS: StepData[] = [
       },
       {
         title: 'Plan d\'automatisation',
-        description: 'Solutions identifiées et planning de mise en œuvre',
+        description: 'Solutions identifiees et planning de mise en oeuvre',
         type: 'file',
         required: true
       }
@@ -200,12 +204,12 @@ export const PROGRAM_STEPS: StepData[] = [
         type: 'template'
       },
       {
-        title: 'Guide Zapier pour débutants',
+        title: 'Guide Zapier pour debutants',
         url: '/guides/zapier-guide.pdf',
         type: 'guide'
       },
       {
-        title: 'Liste des outils recommandés',
+        title: 'Liste des outils recommandes',
         url: '/guides/outils-automatisation.pdf',
         type: 'tool'
       }
@@ -213,14 +217,14 @@ export const PROGRAM_STEPS: StepData[] = [
   },
   {
     number: 5,
-    title: 'Autonomie Opérationnelle',
-    subtitle: 'Pérennisation',
+    title: 'Autonomie Operationnelle',
+    subtitle: 'Perennisation',
     description: 'Consolider vos acquis et mettre en place les rituels qui garantissent votre autonomie durable.',
     durationWeeks: 2,
     objectives: [
       {
         icon: 'BarChart3',
-        text: 'Mesurer les gains de temps réalisés depuis le début'
+        text: 'Mesurer les gains de temps realises depuis le debut'
       },
       {
         icon: 'Calendar',
@@ -228,24 +232,24 @@ export const PROGRAM_STEPS: StepData[] = [
       },
       {
         icon: 'CheckCircle',
-        text: 'Finaliser votre système d\'amélioration continue'
+        text: 'Finaliser votre systeme d\'amelioration continue'
       }
     ],
     deliverables: [
       {
         title: 'Bilan des gains',
-        description: 'Comparaison avant/après avec métriques',
+        description: 'Comparaison avant/apres avec metriques',
         type: 'file',
         required: true
       },
       {
         title: 'Charte des rituels',
-        description: 'Document récapitulatif de tous vos rituels',
+        description: 'Document recapitulatif de tous vos rituels',
         type: 'file',
         required: true
       },
       {
-        title: 'Plan d\'amélioration continue',
+        title: 'Plan d\'amelioration continue',
         description: 'Votre feuille de route pour les 6 prochains mois',
         type: 'file',
         required: true
@@ -276,7 +280,8 @@ export const getStepIcon = (iconName: string) => {
     Lightbulb,
     CheckCircle,
     Settings,
-    Rocket
+    Rocket,
+    Smartphone
   }
   return icons[iconName] || FileText
 }
