@@ -164,7 +164,7 @@ export default function LoginPage() {
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
-            backgroundImage: `url('https://i.ibb.co/C3WqVhvK/Capture-d-cran-2026-02-04-134114.png')`,
+            backgroundImage: `url('https://i.ibb.co/d451r7yd/cristina-gottardi-3-Y76-Quja-IDg-unsplash.jpg')`,
           }}
         >
           <div
