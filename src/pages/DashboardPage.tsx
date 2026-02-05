@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'motion/react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { PROGRAM_STEPS } from '@/lib/program-data'
 import { StepContent } from '@/components/dashboard/StepContent'
 import { toast } from 'sonner'
-import { LogOut, CheckCircle2, Clock, Lock, Hourglass, Eye } from 'lucide-react'
+import { LogOut, CheckCircle2, Clock, Lock, Hourglass, Eye, Settings } from 'lucide-react'
 import type { Program, StepProgress, Submission } from '@/types/database'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
@@ -81,7 +82,8 @@ const patchWithAuth = async (endpoint: string, token: string, body: any) => {
 }
 
 export default function DashboardPage() {
-  const { user, profile, session, signOut } = useAuth()
+  const { user, profile, session, signOut, isAdmin } = useAuth()
+  const navigate = useNavigate()
   const [program, setProgram] = useState<Program | null>(null)
   const [stepProgress, setStepProgress] = useState<StepProgressWithSubmissions[]>([])
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
@@ -301,6 +303,16 @@ export default function DashboardPage() {
               </p>
             </div>
             <div className="flex items-center gap-6">
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-stone-100 text-stone-600 text-sm hover:bg-stone-200 transition-colors"
+                  style={{ borderRadius: '1px' }}
+                >
+                  <Settings className="w-4 h-4" />
+                  Admin
+                </button>
+              )}
               <div className="text-right">
                 <p className="text-sm text-stone-700">{profile?.first_name} {profile?.last_name}</p>
                 <p className="text-xs text-stone-400">
