@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { motion, Reorder } from 'motion/react'
+import { motion } from 'motion/react'
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend 
 } from 'recharts'
 import { 
   Trash2, Bot, Factory, Crown, Check, AlertTriangle,
-  TrendingDown, Clock, Euro, ChevronRight, GripVertical
+  TrendingDown, GripVertical
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { 
@@ -16,6 +16,7 @@ import {
   type Activity,
   type BucketType 
 } from '@/lib/institute-activities'
+import { ActivitySelector } from '@/components/dashboard/ActivitySelector'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -27,21 +28,6 @@ interface Step2AnalysisProps {
   timeEntries: Array<{ category: string; hour_slot: string; entry_date: string }>
   onValidationRequest: () => void
   isValidated?: boolean
-}
-
-interface UserActivity {
-  activity_id: string
-  bucket: BucketType
-}
-
-const getToken = (session: any): string | null => {
-  if (session?.access_token) return session.access_token
-  try {
-    const storageKey = `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`
-    const stored = localStorage.getItem(storageKey)
-    if (stored) return JSON.parse(stored).access_token
-  } catch (e) {}
-  return null
 }
 
 const fetchWithAuth = async (endpoint: string, token: string) => {
@@ -83,128 +69,15 @@ const patchWithAuth = async (endpoint: string, token: string, body: any) => {
   return response.json()
 }
 
-// Écran 1 : Sélection des activités
-function ActivitySelectionScreen({ 
-  selectedActivities, 
-  onSelect, 
-  onContinue 
-}: { 
-  selectedActivities: string[]
-  onSelect: (ids: string[]) => void
-  onContinue: () => void
-}) {
-  const categories = [
-    { key: 'admin', label: 'Administratif & Ménage', color: 'stone' },
-    { key: 'prestation', label: 'Prestations', color: 'emerald' },
-    { key: 'relation', label: 'Relation Client', color: 'blue' },
-    { key: 'developpement', label: 'Développement', color: 'purple' },
-    { key: 'pause', label: 'Pauses', color: 'gray' },
-  ]
-
-  const toggleActivity = (id: string) => {
-    if (selectedActivities.includes(id)) {
-      onSelect(selectedActivities.filter(a => a !== id))
-    } else {
-      onSelect([...selectedActivities, id])
-    }
-  }
-
-  const selectAllInCategory = (category: string) => {
-    const catActivities = INSTITUTE_ACTIVITIES.filter(a => a.category === category).map(a => a.id)
-    const allSelected = catActivities.every(id => selectedActivities.includes(id))
-    
-    if (allSelected) {
-      onSelect(selectedActivities.filter(id => !catActivities.includes(id)))
-    } else {
-      onSelect([...new Set([...selectedActivities, ...catActivities])])
-    }
-  }
-
-  return (
-    <div className="space-y-8">
-      <div className="text-center mb-8">
-        <h2 className="font-serif text-2xl text-stone-800 mb-2">
-          Quelles activités faites-vous ?
-        </h2>
-        <p className="text-sm text-stone-500">
-          Cochez toutes les tâches que vous réalisez dans votre institut
-        </p>
-      </div>
-
-      {categories.map(cat => {
-        const activities = INSTITUTE_ACTIVITIES.filter(a => a.category === cat.key)
-        const selectedCount = activities.filter(a => selectedActivities.includes(a.id)).length
-        
-        return (
-          <div key={cat.key} className="bg-white border border-stone-200 p-6" style={{ borderRadius: '1px' }}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-medium text-stone-700">{cat.label}</h3>
-                <p className="text-xs text-stone-400">{selectedCount}/{activities.length} sélectionnées</p>
-              </div>
-              <button
-                onClick={() => selectAllInCategory(cat.key)}
-                className="text-xs text-stone-500 hover:text-stone-700 underline"
-              >
-                {selectedCount === activities.length ? 'Tout désélectionner' : 'Tout sélectionner'}
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {activities.map(activity => (
-                <button
-                  key={activity.id}
-                  onClick={() => toggleActivity(activity.id)}
-                  className={`flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                    selectedActivities.includes(activity.id)
-                      ? 'bg-stone-800 text-white'
-                      : 'bg-stone-50 text-stone-600 hover:bg-stone-100'
-                  }`}
-                  style={{ borderRadius: '1px' }}
-                >
-                  <div className={`w-4 h-4 border flex items-center justify-center ${
-                    selectedActivities.includes(activity.id)
-                      ? 'border-white bg-white'
-                      : 'border-stone-300'
-                  }`} style={{ borderRadius: '1px' }}>
-                    {selectedActivities.includes(activity.id) && (
-                      <Check className="w-3 h-3 text-stone-800" />
-                    )}
-                  </div>
-                  <span className="truncate">{activity.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-
-      <div className="flex justify-end">
-        <button
-          onClick={onContinue}
-          disabled={selectedActivities.length === 0}
-          className="flex items-center gap-2 px-6 py-3 bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ borderRadius: '1px' }}
-        >
-          Voir mon analyse
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // Composant Bac avec drag & drop
 function Bucket({ 
   type, 
   activities, 
-  onDrop,
-  onRemove 
+  onDrop 
 }: { 
   type: BucketType
   activities: Activity[]
   onDrop: (activityId: string, bucket: BucketType) => void
-  onRemove: (activityId: string) => void
 }) {
   const config = BUCKET_CONFIG[type]
   const icons = {
@@ -235,8 +108,8 @@ function Bucket({
 
   return (
     <div 
-      className={`flex flex-col h-full border ${config.color} p-4 transition-all`}
-      style={{ borderRadius: '1px', minHeight: '300px' }}
+      className={`flex flex-col border ${config.color} p-4 transition-all`}
+      style={{ borderRadius: '1px', minHeight: '280px' }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -246,11 +119,11 @@ function Bucket({
         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${config.color}`}>
           <Icon className={`w-5 h-5 ${config.iconColor}`} />
         </div>
-        <div>
-          <h4 className="font-medium text-stone-800">{config.label}</h4>
+        <div className="flex-1 min-w-0">
+          <h4 className="font-medium text-stone-800 text-sm">{config.label}</h4>
           <p className="text-[10px] text-stone-400 uppercase tracking-wider">{config.subtitle}</p>
         </div>
-        <span className="ml-auto text-xs text-stone-400">{activities.length}</span>
+        <span className="text-xs text-stone-400 flex-shrink-0">{activities.length}</span>
       </div>
 
       {/* Activities */}
@@ -265,12 +138,13 @@ function Bucket({
               key={activity.id}
               draggable
               onDragStart={(e) => e.dataTransfer.setData('activityId', activity.id)}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-stone-100 text-sm text-stone-600 cursor-grab hover:border-stone-300 transition-colors group"
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-stone-100 text-xs text-stone-600 cursor-grab hover:border-stone-300 transition-colors group"
               style={{ borderRadius: '1px' }}
+              title={activity.label}
             >
-              <GripVertical className="w-3 h-3 text-stone-300 group-hover:text-stone-400" />
-              <span className="flex-1 truncate">{activity.label}</span>
-              <span className="text-[10px] text-stone-400">{activity.hourlyValue}€/h</span>
+              <GripVertical className="w-3 h-3 text-stone-300 group-hover:text-stone-400 flex-shrink-0" />
+              <span className="flex-1 leading-relaxed">{activity.label}</span>
+              <span className="text-[10px] text-stone-400 flex-shrink-0">{activity.hourlyValue}€</span>
             </div>
           ))
         )}
@@ -279,7 +153,6 @@ function Bucket({
   )
 }
 
-// Écran principal d'analyse
 export default function Step2Analysis({
   userId,
   token,
@@ -329,6 +202,16 @@ export default function Step2Analysis({
     const prestationHours = timeEntries.filter(e => e.category === 'PRESTATION').length
     const adminHours = timeEntries.filter(e => e.category === 'ADMINISTRATIF').length
     
+    // Éviter division par zéro
+    if (prestationHours === 0) {
+      return {
+        hourlyPrestationRate: 50, // Valeur par défaut
+        weeklyLeakage: adminHours * 35,
+        monthlyLeakage: adminHours * 35 * 4,
+        yearlyLeakage: adminHours * 35 * 4 * 12,
+      }
+    }
+    
     return calculateFinancialMetrics(monthlyRevenue, prestationHours, adminHours)
   }, [monthlyRevenue, timeEntries])
 
@@ -345,7 +228,7 @@ export default function Step2Analysis({
 
   // Initialiser les bacs avec les valeurs par défaut
   useEffect(() => {
-    if (showAnalysis && Object.keys(activityBuckets).length === 0) {
+    if (showAnalysis && Object.keys(activityBuckets).length === 0 && selectedActivities.length > 0) {
       const defaultBuckets: Record<string, BucketType> = {}
       selectedActivities.forEach(actId => {
         const activity = INSTITUTE_ACTIVITIES.find(a => a.id === actId)
@@ -355,10 +238,15 @@ export default function Step2Analysis({
       })
       setActivityBuckets(defaultBuckets)
     }
-  }, [showAnalysis, selectedActivities])
+  }, [showAnalysis, selectedActivities, activityBuckets])
 
-  // Sauvegarder les activités
-  const handleContinue = async () => {
+  // Sauvegarder les activités après sélection
+  const handleSelectionComplete = async () => {
+    if (selectedActivities.length === 0) {
+      toast.error('Veuillez sélectionner au moins une activité')
+      return
+    }
+
     setIsSaving(true)
     try {
       // Créer les buckets par défaut
@@ -377,7 +265,11 @@ export default function Step2Analysis({
         bucket: defaultBuckets[actId]
       }))
 
-      await postWithAuth('user_activities', token, records)
+      const result = await postWithAuth('user_activities', token, records)
+      
+      if (result.error) {
+        throw new Error(result.error.message)
+      }
       
       setActivityBuckets(defaultBuckets)
       setShowAnalysis(true)
@@ -418,16 +310,18 @@ export default function Step2Analysis({
     )
   }
 
+  // Écran de sélection des activités (style onboarding)
   if (!showAnalysis) {
     return (
-      <ActivitySelectionScreen
+      <ActivitySelector
         selectedActivities={selectedActivities}
         onSelect={setSelectedActivities}
-        onContinue={handleContinue}
+        onComplete={handleSelectionComplete}
       />
     )
   }
 
+  // Dashboard d'analyse
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -441,45 +335,51 @@ export default function Step2Analysis({
       </div>
 
       {/* Métriques financières */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Camembert Valeur Horaire */}
-        <div className="col-span-2 bg-white border border-stone-200 p-6" style={{ borderRadius: '1px' }}>
-          <h3 className="text-sm font-medium text-stone-700 uppercase tracking-wider mb-4">
+        <div className="lg:col-span-2 bg-white border border-stone-200 p-6" style={{ borderRadius: '1px' }}>
+          <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-4">
             Répartition de votre temps par valeur
           </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value: number) => [`${value}h`, '']}
-                  contentStyle={{ borderRadius: '1px', border: '1px solid #e7e5e4' }}
-                />
-                <Legend 
-                  formatter={(value) => <span className="text-xs text-stone-600">{value}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {pieData.length > 0 ? (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: number) => [`${value}h`, '']}
+                    contentStyle={{ borderRadius: '1px', border: '1px solid #e7e5e4' }}
+                  />
+                  <Legend 
+                    formatter={(value) => <span className="text-xs text-stone-600">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-64 flex items-center justify-center">
+              <p className="text-sm text-stone-400">Aucune donnée de temps disponible</p>
+            </div>
+          )}
         </div>
 
         {/* Card Fuite de Cash */}
         <div className="bg-red-50 border border-red-200 p-6" style={{ borderRadius: '1px' }}>
           <div className="flex items-center gap-2 mb-4">
             <TrendingDown className="w-5 h-5 text-red-500" />
-            <h3 className="text-sm font-medium text-red-700 uppercase tracking-wider">
+            <h3 className="text-xs font-medium text-red-700 uppercase tracking-wider">
               Fuite de Cash
             </h3>
           </div>
@@ -509,7 +409,7 @@ export default function Step2Analysis({
 
             <div className="bg-red-100 p-3" style={{ borderRadius: '1px' }}>
               <p className="text-xs text-red-700 leading-relaxed">
-                En faisant votre propre admin/ménage, vous perdez la capacité de générer{' '}
+                En faisant votre propre admin/ménage, vous perdez{' '}
                 <strong>{metrics.yearlyLeakage.toLocaleString('fr-FR')} €</strong> par an.
               </p>
             </div>
@@ -525,44 +425,40 @@ export default function Step2Analysis({
             Vous êtes l'employée à 15€/h la plus chère de votre entreprise.
           </p>
           <p className="text-xs text-stone-500">
-            Chaque heure passée sur des tâches à faible valeur vous coûte {metrics.hourlyPrestationRate - 15}€ en opportunité perdue.
+            Chaque heure passée sur des tâches à faible valeur vous coûte {Math.max(0, metrics.hourlyPrestationRate - 15)}€ en opportunité perdue.
           </p>
         </div>
       </div>
 
       {/* Les 4 Bacs */}
       <div>
-        <h3 className="text-sm font-medium text-stone-700 uppercase tracking-wider mb-4">
+        <h3 className="text-xs font-medium text-stone-500 uppercase tracking-wider mb-2">
           Organisation de vos tâches
         </h3>
-        <p className="text-xs text-stone-500 mb-4">
+        <p className="text-xs text-stone-400 mb-4">
           Glissez-déposez les tâches entre les bacs pour ajuster l'organisation
         </p>
         
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Bucket
             type="poubelle"
             activities={getActivitiesForBucket('poubelle')}
             onDrop={handleMoveToBucket}
-            onRemove={() => {}}
           />
           <Bucket
             type="robot"
             activities={getActivitiesForBucket('robot')}
             onDrop={handleMoveToBucket}
-            onRemove={() => {}}
           />
           <Bucket
             type="usine"
             activities={getActivitiesForBucket('usine')}
             onDrop={handleMoveToBucket}
-            onRemove={() => {}}
           />
           <Bucket
             type="trone"
             activities={getActivitiesForBucket('trone')}
             onDrop={handleMoveToBucket}
-            onRemove={() => {}}
           />
         </div>
       </div>
