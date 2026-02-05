@@ -1,4 +1,4 @@
-import { FileText, Calendar, Target, Users, BarChart3, Lightbulb, CheckCircle, Settings, Rocket, Smartphone } from 'lucide-react'
+import { FileText, Calendar, Target, Users, BarChart3, Lightbulb, CheckCircle, Settings, Rocket, Smartphone, PieChart, Factory, Bot } from 'lucide-react'
 
 export interface StepData {
   number: number
@@ -13,7 +13,7 @@ export interface StepData {
   deliverables: {
     title: string
     description: string
-    type: 'link' | 'file' | 'text' | 'app'
+    type: 'link' | 'file' | 'text' | 'app' | 'analysis'
     required: boolean
     appUrl?: string
   }[]
@@ -23,6 +23,7 @@ export interface StepData {
     type: 'template' | 'video' | 'guide' | 'tool' | 'app'
   }[]
   isTimeStudy?: boolean
+  isAnalysis?: boolean
 }
 
 export const PROGRAM_STEPS: StepData[] = [
@@ -36,7 +37,7 @@ export const PROGRAM_STEPS: StepData[] = [
     objectives: [
       {
         icon: 'Smartphone',
-        text: 'Acceder a l\'application Altarys Conseil avec vos identifiants AURA'
+        text: 'Acceder a l\'application Altarys Conseil avec vos identifiants'
       },
       {
         icon: 'Calendar',
@@ -50,7 +51,7 @@ export const PROGRAM_STEPS: StepData[] = [
     deliverables: [
       {
         title: 'Application Time Study',
-        description: 'Connectez-vous avec vos identifiants AURA pour commencer le suivi',
+        description: 'Connectez-vous avec vos identifiants pour commencer le suivi',
         type: 'app',
         required: true,
         appUrl: 'https://altarys-conseil-app.vercel.app'
@@ -61,151 +62,119 @@ export const PROGRAM_STEPS: StepData[] = [
         title: 'Acceder a l\'application',
         url: 'https://altarys-conseil-app.vercel.app',
         type: 'app'
-      },
-      {
-        title: 'Guide d\'utilisation',
-        url: '/guides/time-study-guide.pdf',
-        type: 'guide'
       }
     ]
   },
   {
     number: 2,
-    title: 'Planification Strategique',
-    subtitle: 'Organisation & Priorites',
-    description: 'Definir vos priorites business et creer un systeme de planification efficace aligne avec vos objectifs.',
-    durationWeeks: 2,
+    title: 'Analyse Strategique',
+    subtitle: 'Revelation & Tri',
+    description: 'Decouvrez ou part votre temps, combien il vous coute, et organisez vos taches pour maximiser votre valeur.',
+    durationWeeks: 1,
+    isAnalysis: true,
     objectives: [
       {
-        icon: 'Target',
-        text: 'Identifier vos 3 priorites business pour le trimestre'
+        icon: 'PieChart',
+        text: 'Visualiser la repartition de votre temps par valeur horaire (15€, 50€, 500€)'
       },
       {
-        icon: 'Calendar',
-        text: 'Mettre en place votre systeme de planification hebdomadaire'
+        icon: 'BarChart3',
+        text: 'Comprendre votre "fuite de cash" mensuelle et annuelle'
       },
       {
-        icon: 'CheckCircle',
-        text: 'Creer votre matrice de priorisation des taches'
+        icon: 'Settings',
+        text: 'Organiser vos taches dans les 4 bacs : Poubelle, Robot, Usine, Trone'
       }
     ],
     deliverables: [
       {
-        title: 'Plan strategique trimestriel',
-        description: 'Document avec vos 3 priorites et leur declinaison en actions',
-        type: 'file',
-        required: true
-      },
-      {
-        title: 'Planning hebdomadaire type',
-        description: 'Votre semaine type optimisee',
-        type: 'link',
+        title: 'Dashboard d\'analyse',
+        description: 'Vos metriques sont calculees automatiquement depuis votre Time Study',
+        type: 'analysis',
         required: true
       }
     ],
-    resources: [
-      {
-        title: 'Template Plan Strategique',
-        url: '/templates/plan-strategique.docx',
-        type: 'template'
-      },
-      {
-        title: 'Video : La methode Eisenhower',
-        url: 'https://www.youtube.com/watch?v=XXX',
-        type: 'video'
-      }
-    ]
+    resources: []
   },
   {
     number: 3,
     title: 'Delegation Efficace',
-    subtitle: 'Liberer votre temps',
-    description: 'Identifier les taches a deleguer et mettre en place des process de delegation efficaces.',
+    subtitle: 'L\'Usine en Action',
+    description: 'Transformer les taches du bac "Usine" en procedures documentees et les deleguer efficacement.',
     durationWeeks: 3,
     objectives: [
       {
+        icon: 'Factory',
+        text: 'Reprendre les taches identifiees dans le bac Usine'
+      },
+      {
+        icon: 'FileText',
+        text: 'Creer des procedures (SOP) pour chaque tache delegable'
+      },
+      {
         icon: 'Users',
-        text: 'Cartographier toutes vos taches recurrentes'
-      },
-      {
-        icon: 'Settings',
-        text: 'Creer des procedures de delegation documentees'
-      },
-      {
-        icon: 'CheckCircle',
         text: 'Former et accompagner sur les premieres delegations'
       }
     ],
     deliverables: [
       {
-        title: 'Matrice de delegation',
-        description: 'Liste des taches avec responsables assignes',
+        title: 'Procedures documentees',
+        description: 'Au moins 3 procedures de taches deleguees',
         type: 'file',
         required: true
       },
       {
-        title: 'Procedures documentees',
-        description: 'Au moins 3 procedures de taches deleguees',
+        title: 'Plan de delegation',
+        description: 'Liste des taches avec responsables assignes et echeances',
         type: 'file',
         required: true
       }
     ],
     resources: [
       {
-        title: 'Template Matrice Delegation',
-        url: '/templates/matrice-delegation.xlsx',
+        title: 'Template Procedure SOP',
+        url: '/templates/procedure-sop.docx',
         type: 'template'
       },
       {
-        title: 'Guide : Creer une procedure',
-        url: '/guides/creer-procedure.pdf',
+        title: 'Guide : Deleguer sans stress',
+        url: '/guides/deleguer-sans-stress.pdf',
         type: 'guide'
       }
     ]
   },
   {
     number: 4,
-    title: 'Optimisation des Process',
-    subtitle: 'Systematisation',
-    description: 'Automatiser et optimiser vos processus cles pour gagner en efficacite.',
-    durationWeeks: 3,
+    title: 'Automatisation',
+    subtitle: 'Le Robot en Marche',
+    description: 'Mettre en place les automatisations pour les taches du bac "Robot" et liberer votre temps.',
+    durationWeeks: 2,
     objectives: [
       {
-        icon: 'Settings',
-        text: 'Identifier vos 5 processus les plus chronophages'
+        icon: 'Bot',
+        text: 'Reprendre les taches identifiees dans le bac Robot'
       },
       {
-        icon: 'Lightbulb',
-        text: 'Proposer des optimisations et automatisations'
+        icon: 'Settings',
+        text: 'Configurer les outils d\'automatisation (confirmations RDV, relances, etc.)'
       },
       {
         icon: 'Rocket',
-        text: 'Implementer au moins 2 automatisations'
+        text: 'Tester et valider chaque automatisation'
       }
     ],
     deliverables: [
       {
-        title: 'Audit des processus',
-        description: 'Analyse des 5 processus avec temps et points de friction',
-        type: 'file',
-        required: true
-      },
-      {
-        title: 'Plan d\'automatisation',
-        description: 'Solutions identifiees et planning de mise en oeuvre',
+        title: 'Liste des automatisations actives',
+        description: 'Capture d\'ecran ou documentation de chaque automatisation mise en place',
         type: 'file',
         required: true
       }
     ],
     resources: [
       {
-        title: 'Template Audit Process',
-        url: '/templates/audit-process.xlsx',
-        type: 'template'
-      },
-      {
-        title: 'Guide Zapier pour debutants',
-        url: '/guides/zapier-guide.pdf',
+        title: 'Guide Automatisation RDV',
+        url: '/guides/automatisation-rdv.pdf',
         type: 'guide'
       },
       {
@@ -218,8 +187,8 @@ export const PROGRAM_STEPS: StepData[] = [
   {
     number: 5,
     title: 'Autonomie Operationnelle',
-    subtitle: 'Perennisation',
-    description: 'Consolider vos acquis et mettre en place les rituels qui garantissent votre autonomie durable.',
+    subtitle: 'Le Trone Installe',
+    description: 'Consolider vos acquis, mesurer les gains et installer les rituels qui garantissent votre liberte durable.',
     durationWeeks: 2,
     objectives: [
       {
@@ -238,19 +207,13 @@ export const PROGRAM_STEPS: StepData[] = [
     deliverables: [
       {
         title: 'Bilan des gains',
-        description: 'Comparaison avant/apres avec metriques',
+        description: 'Comparaison avant/apres avec metriques (heures liberees, CA potentiel)',
         type: 'file',
         required: true
       },
       {
         title: 'Charte des rituels',
-        description: 'Document recapitulatif de tous vos rituels',
-        type: 'file',
-        required: true
-      },
-      {
-        title: 'Plan d\'amelioration continue',
-        description: 'Votre feuille de route pour les 6 prochains mois',
+        description: 'Document recapitulatif de tous vos rituels de dirigeante',
         type: 'file',
         required: true
       }
@@ -262,7 +225,7 @@ export const PROGRAM_STEPS: StepData[] = [
         type: 'template'
       },
       {
-        title: 'Checklist rituels manager',
+        title: 'Checklist rituels dirigeante',
         url: '/guides/checklist-rituels.pdf',
         type: 'guide'
       }
@@ -281,7 +244,10 @@ export const getStepIcon = (iconName: string) => {
     CheckCircle,
     Settings,
     Rocket,
-    Smartphone
+    Smartphone,
+    PieChart,
+    Factory,
+    Bot
   }
   return icons[iconName] || FileText
 }
