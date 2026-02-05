@@ -19,6 +19,12 @@ interface StepProgressWithSubmissions extends StepProgress {
   }
 }
 
+interface TimeEntry {
+  category: string
+  hour_slot: string
+  entry_date: string
+}
+
 const getToken = (session: any): string | null => {
   if (session?.access_token) return session.access_token
   
@@ -78,6 +84,7 @@ export default function DashboardPage() {
   const { user, profile, session, signOut } = useAuth()
   const [program, setProgram] = useState<Program | null>(null)
   const [stepProgress, setStepProgress] = useState<StepProgressWithSubmissions[]>([])
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [activeStep, setActiveStep] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -91,6 +98,7 @@ export default function DashboardPage() {
     }
 
     try {
+      // Fetch program
       const programs = await fetchWithAuth(`programs?select=*&user_id=eq.${user.id}`, token)
 
       if (!programs || programs.length === 0 || programs.error) {
@@ -103,6 +111,7 @@ export default function DashboardPage() {
       setProgram(programData)
       setActiveStep(programData.current_step || 1)
 
+      // Fetch step progress
       const progressData = await fetchWithAuth(
         `step_progress?select=*,submissions(*),steps(*)&program_id=eq.${programData.id}`,
         token
@@ -114,6 +123,17 @@ export default function DashboardPage() {
         )
         setStepProgress(sorted)
       }
+
+      // Fetch time entries for Step 2 analysis
+      const entries = await fetchWithAuth(
+        `time_entries?user_id=eq.${user.id}&order=entry_date.desc`,
+        token
+      )
+
+      if (entries && !entries.error) {
+        setTimeEntries(entries)
+      }
+
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -174,7 +194,7 @@ export default function DashboardPage() {
             user_id: admin.id,
             type: 'submission_received',
             title: 'Nouvelle soumission',
-            message: `${profile?.first_name} ${profile?.last_name} a soumis un livrable pour l etape ${activeStep}`,
+            message: `${profile?.first_name} ${profile?.last_name} a soumis un livrable pour le bloc ${activeStep}`,
             data: { 
               client_id: user?.id,
               step_number: activeStep,
@@ -191,6 +211,43 @@ export default function DashboardPage() {
       console.error('Submit error:', error)
       toast.error('Erreur lors de la soumission')
       throw error
+    }
+  }
+
+  // Demande de validation pour le Bloc 2
+  const handleValidationRequest = async () => {
+    const token = getToken(session)
+    if (!token || !currentProgress) return
+
+    try {
+      await patchWithAuth(
+        `step_progress?id=eq.${currentProgress.id}`,
+        token,
+        { status: 'pending_validation' }
+      )
+
+      // Notifier l'admin
+      const admins = await fetchWithAuth(`profiles?select=id&role=eq.admin`, token)
+      if (admins && !admins.error) {
+        for (const admin of admins) {
+          await postWithAuth('notifications', token, {
+            user_id: admin.id,
+            type: 'validation_requested',
+            title: 'Validation demandee',
+            message: `${profile?.first_name} ${profile?.last_name} demande la validation de son organisation (Bloc 2)`,
+            data: { 
+              client_id: user?.id,
+              step_number: activeStep
+            },
+          })
+        }
+      }
+
+      toast.success('Demande de validation envoyee !')
+      fetchData()
+    } catch (error) {
+      console.error('Error:', error)
+      toast.error('Erreur lors de la demande')
     }
   }
 
@@ -282,7 +339,7 @@ export default function DashboardPage() {
       {/* Step Navigation */}
       <div className="bg-white border-b border-stone-100">
         <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto">
             {PROGRAM_STEPS.map((step) => {
               const status = getStepStatus(step.number)
               const isLocked = !isStepAccessible(step.number)
@@ -295,7 +352,7 @@ export default function DashboardPage() {
                   key={step.number}
                   onClick={() => !isLocked && !isBlockedForFree && setActiveStep(step.number)}
                   disabled={isLocked || isBlockedForFree}
-                  className={`flex items-center gap-2 px-4 py-2 transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2 whitespace-nowrap transition-all ${
                     isCurrent
                       ? 'bg-stone-800 text-white'
                       : isLocked || isBlockedForFree
@@ -323,6 +380,8 @@ export default function DashboardPage() {
             progress={currentProgress}
             submissions={currentProgress?.submissions}
             onSubmit={handleSubmit}
+            timeEntries={timeEntries}
+            onValidationRequest={handleValidationRequest}
           />
         )}
       </div>
