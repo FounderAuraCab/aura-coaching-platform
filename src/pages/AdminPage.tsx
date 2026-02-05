@@ -249,12 +249,22 @@ export default function AdminPage() {
   const handleConvertToPremium = async (clientId: string) => {
     if (!selectedClient) return
     const token = getToken(session)
-    if (!token) return
+    if (!token) {
+      toast.error('Session expirée, veuillez vous reconnecter')
+      return
+    }
 
     setIsProcessing(true)
     try {
-      await patchWithAuth(`profiles?id=eq.${clientId}`, token, { plan: 'premium' })
+      // 1. Mettre à jour le plan en premium
+      const updateResult = await patchWithAuth(`profiles?id=eq.${clientId}`, token, { plan: 'premium' })
+      console.log('Update profile result:', updateResult)
+      
+      if (updateResult.error) {
+        throw new Error(updateResult.error.message || 'Erreur lors de la mise à jour du profil')
+      }
 
+      // 2. Si Bloc 1 est "analysis_ready", le passer en "completed" et activer Bloc 2
       const bloc1 = selectedClient.stepProgress.find((sp: StepProgressWithDetails) => sp.steps?.number === 1)
       if (bloc1 && bloc1.status === 'analysis_ready') {
         await patchWithAuth(
@@ -278,6 +288,7 @@ export default function AdminPage() {
         }
       }
 
+      // 3. Envoyer notification
       await postWithAuth('notifications', token, {
         user_id: clientId,
         type: 'message',
@@ -286,12 +297,20 @@ export default function AdminPage() {
         data: {}
       })
 
-      toast.success('Client passe en Premium !')
+      toast.success('Client passé en Premium !')
+      
+      // 4. Mettre à jour l'état local immédiatement
+      setSelectedClient(prev => prev ? {
+        ...prev,
+        profile: { ...prev.profile, plan: 'premium' }
+      } : null)
+      
+      // 5. Recharger la liste complète
       fetchClients()
 
     } catch (error) {
-      console.error('Error:', error)
-      toast.error('Erreur')
+      console.error('Error converting to premium:', error)
+      toast.error('Erreur lors du passage en Premium')
     } finally {
       setIsProcessing(false)
     }
